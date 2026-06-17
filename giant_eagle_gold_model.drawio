@@ -1,0 +1,396 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="ge-gold-model" name="GE Gold Layer">
+    <mxGraphModel dx="1700" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- TITLE -->
+        <mxCell id="title" value="Giant Eagle Gold Layer: Lift-and-Shift vs Lakehouse-Native" style="text;html=1;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;fontColor=#1F3864;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="1660" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="All 51 Snowflake views covered. Same Power BI consumes either side via compatibility view layer." style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#595959;" vertex="1" parent="1">
+          <mxGeometry x="20" y="40" width="1660" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- DIVIDER -->
+        <mxCell id="divider" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#CCCCCC;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="780" y="80" as="sourcePoint"/>
+            <mxPoint x="780" y="1170" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ============== VERSION A LEFT SIDE ============== -->
+        <mxCell id="vaTitle" value="Version A: Lift-and-Shift (51 Delta views, 1:1)" style="text;html=1;align=center;fontSize=14;fontStyle=1;fontColor=#1F3864;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="700" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaSub" value="Mechanical port. Inherits the per-DC duplication and per-BU view sprawl." style="text;html=1;align=center;fontSize=10;fontStyle=2;fontColor=#595959;" vertex="1" parent="1">
+          <mxGeometry x="40" y="100" width="700" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Shared Bronze label -->
+        <mxCell id="vaBronzeLabel" value="SHARED BRONZE (35 base tables)" style="text;html=1;align=left;fontSize=10;fontStyle=1;fontColor=#595959;" vertex="1" parent="1">
+          <mxGeometry x="40" y="130" width="700" height="14" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaBronze" value="&lt;b&gt;Inventory:&lt;/b&gt;&#10;item_master_ite_item, dcinventory_dci_inventory, ite_item_package, dci_location, dci_ilpn&#10;&lt;br&gt;&lt;b&gt;Transactions / receiving / outbound / shipment / orders / tasks:&lt;/b&gt;&#10;pix_entry, rcv_asn(_line), rcv_purchase_order(_line, _status), ppk_olpn(_detail), tsk_task, dco_order, shp_shipment, etc." style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=9;fillColor=#F5F5F5;strokeColor=#999999;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="700" height="56" as="geometry"/>
+        </mxCell>
+
+        <!-- Gold lift-shift label -->
+        <mxCell id="vaGoldLabel" value="GOLD LIFT-AND-SHIFT (51 Delta views, grouped by BU)" style="text;html=1;align=left;fontSize=10;fontStyle=1;fontColor=#595959;" vertex="1" parent="1">
+          <mxGeometry x="40" y="220" width="700" height="14" as="geometry"/>
+        </mxCell>
+
+        <!-- BICEPS group -->
+        <mxCell id="vaBiceps" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EAF1F8;strokeColor=#2E75B6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="250" width="220" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaBicepsHdr" value="BICEPS (14 views)" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#2E75B6;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="250" width="220" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaBicepsBody" value="biceps_iroo_v&#10;biceps_iroo_v_d0001, d0044, d0050&#10;biceps_iroo_v_d0061, d0070, d0080&#10;&#10;biceps_qroo_v&#10;biceps_qroo_v_d0001, d0044, d0050&#10;biceps_qroo_v_d0061, d0070, d0080&#10;&#10;&lt;i&gt;Same SQL, 6 facility filters duplicated&#10;across IROO and QROO patterns.&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="270" width="220" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaCcsHdr" value="CCS (4 views)" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#1F3864;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="400" width="220" height="14" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaCcsBody" value="ccs_inv_compare_v, ccs_iroo_v&#10;ccs_qroo_v, ccs_item_snapshot_v&#10;&#10;&lt;i&gt;Cross-facility / corporate.&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="415" width="220" height="55" as="geometry"/>
+        </mxCell>
+
+        <!-- GE_CS + HBC group -->
+        <mxCell id="vaGeCs" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EAF1F8;strokeColor=#2E75B6;" vertex="1" parent="1">
+          <mxGeometry x="270" y="250" width="220" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaGeCsHdr" value="GE_CS Corporate (4 views)" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#2E75B6;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="270" y="250" width="220" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaGeCsBody" value="ge_cs_invn_dly_total_v&#10;ge_cs_adjustment_reason_v&#10;ge_cs_cycl_cnt_adjmt_dtlv&#10;ge_cs_transaction_dtl_v" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="270" y="270" width="220" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaHbcHdr" value="HBC pharmacy (6 views)" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#1F3864;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="270" y="340" width="220" height="14" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaHbcBody" value="hbc_iroo_v_d0080&#10;hbc_qroo_v_d0080&#10;hbc_item_snapshot_v_d0080&#10;hbc_pharmacy_transportion_oh_v&#10;hbc_pharmacy_transportion_pa_v&#10;hbc_task_group_desc&#10;&#10;&lt;i&gt;Regulatory-sensitive (controlled subs).&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="270" y="355" width="220" height="115" as="geometry"/>
+        </mxCell>
+
+        <!-- Other BUs group -->
+        <mxCell id="vaOther" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EAF1F8;strokeColor=#2E75B6;" vertex="1" parent="1">
+          <mxGeometry x="500" y="250" width="240" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaOtherHdr" value="Single-BU variants (15 views)" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#2E75B6;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="500" y="250" width="240" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaOtherBody" value="&lt;b&gt;ASF (D0061, 3):&lt;/b&gt; asf_iroo, asf_qroo, asf_item_snapshot&#10;&lt;b&gt;BRM (D0050, 3):&lt;/b&gt; brm_iroo, brm_qroo, brm_item_snapshot&#10;&lt;b&gt;FFM (D0070, 3):&lt;/b&gt; ffm_iroo, ffm_qroo, ffm_item_snapshot&#10;&lt;b&gt;OKG (D0001, 3):&lt;/b&gt; okg_iroo, okg_qroo, okg_item_snapshot&#10;&lt;b&gt;OKP (D0044, 3):&lt;/b&gt; okp_iroo, okp_qroo, okp_item_snapshot&#10;&#10;&lt;i&gt;Each BU = same template, different facility filter.&#10;Six near-identical copies of three patterns.&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="500" y="270" width="240" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- Transportation + Specialty -->
+        <mxCell id="vaTransp" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EAF1F8;strokeColor=#2E75B6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="485" width="450" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaTranspHdr" value="Transportation + Specialty (8 views)" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#2E75B6;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="485" width="450" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaTranspBody" value="v_gesc_closed_loads, v_gesc_wm_inventory, v_load_sheets&#10;pse_case_v, sis_v, item_first_rcpt&#10;time_diff (freshness diagnostic), misha_test_v (DEV, drop)&#10;&lt;i&gt;Heterogeneous shapes; no obvious pattern reuse.&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="40" y="505" width="450" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Pattern callout -->
+        <mxCell id="vaPattern" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D4A017;" vertex="1" parent="1">
+          <mxGeometry x="500" y="485" width="240" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="vaPatternBody" value="&lt;b style=&quot;color:#7A4900&quot;&gt;Pattern observed&lt;/b&gt;&#10;~40 of 51 views are per-DC duplicates of just 3 templates: IROO, QROO, SNAPSHOT.&#10;Schema changes ripple through N copies.&#10;Per-DC SQL maintenance is ongoing tax." style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontColor=#7A4900;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="500" y="485" width="240" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- ============== VERSION B RIGHT SIDE ============== -->
+        <mxCell id="vbTitle" value="Version B: Lakehouse-Native (de facto Gold by Databricks expert)" style="text;html=1;align=center;fontSize=14;fontStyle=1;fontColor=#1F3864;" vertex="1" parent="1">
+          <mxGeometry x="820" y="80" width="820" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="vbSub" value="Conformed dimensions + 12 facts + 51 compatibility views (template + filter)." style="text;html=1;align=center;fontSize=10;fontStyle=2;fontColor=#595959;" vertex="1" parent="1">
+          <mxGeometry x="820" y="100" width="820" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Shared Bronze callout -->
+        <mxCell id="vbBronzeLabel" value="SHARED BRONZE (same 35 base tables)" style="text;html=1;align=left;fontSize=10;fontStyle=1;fontColor=#595959;" vertex="1" parent="1">
+          <mxGeometry x="820" y="130" width="820" height="14" as="geometry"/>
+        </mxCell>
+        <mxCell id="vbBronze" value="Same Bronze feeds both versions. Lakeflow Connect-managed; no duplication." style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=10;fillColor=#F5F5F5;strokeColor=#999999;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="820" y="150" width="820" height="36" as="geometry"/>
+        </mxCell>
+
+        <!-- Dimensions label -->
+        <mxCell id="vbDimsLabel" value="CONFORMED DIMENSIONS (8 tables)" style="text;html=1;align=left;fontSize=10;fontStyle=1;fontColor=#595959;" vertex="1" parent="1">
+          <mxGeometry x="820" y="200" width="820" height="14" as="geometry"/>
+        </mxCell>
+
+        <!-- Dimensions row 1 -->
+        <mxCell id="dimItem" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D4A017;" vertex="1" parent="1">
+          <mxGeometry x="820" y="225" width="190" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimItemHdr" value="dim_item" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#B8860B;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="820" y="225" width="190" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimItemBody" value="&lt;b style=&quot;color:#1F3864&quot;&gt;item_sk (PK)&lt;/b&gt;&#10;item_id (natural)&#10;profile_id, descriptions&#10;ext_gegl_department&#10;unit/pack dims (denormalized)&#10;&lt;i&gt;SCD2-ready&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="820" y="245" width="190" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dimFacility" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D4A017;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="225" width="190" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimFacilityHdr" value="dim_facility" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#B8860B;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="225" width="190" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimFacilityBody" value="&lt;b style=&quot;color:#1F3864&quot;&gt;facility_sk (PK)&lt;/b&gt;&#10;facility_id (D0001..D0080)&#10;facility_short (01..80)&#10;virtual_warehouse_group&#10;business_unit_code&#10;&lt;i&gt;14 facilities loaded&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="245" width="190" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dimBu" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D4A017;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="225" width="190" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimBuHdr" value="dim_business_unit" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#B8860B;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="225" width="190" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimBuBody" value="&lt;b style=&quot;color:#1F3864&quot;&gt;business_unit_sk (PK)&lt;/b&gt;&#10;business_unit_code&#10;primary_facility_id&#10;facility_id_pattern&#10;&lt;i&gt;BICEPS, HBC, ASF, BRM,&#10;FFM, OKG, OKP, CCS&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="245" width="190" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dimLoc" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D4A017;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="225" width="190" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimLocHdr" value="dim_location" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#B8860B;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="225" width="190" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimLocBody" value="&lt;b style=&quot;color:#1F3864&quot;&gt;location_sk (PK)&lt;/b&gt;&#10;location_id, barcode&#10;facility_id (FK)&#10;location_type&#10;aisle, bay, level" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="245" width="190" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Dimensions row 2 -->
+        <mxCell id="dimDate" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D4A017;" vertex="1" parent="1">
+          <mxGeometry x="820" y="335" width="190" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimDateHdr" value="dim_date" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#B8860B;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="820" y="335" width="190" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimDateBody" value="&lt;b style=&quot;color:#1F3864&quot;&gt;date_sk (PK, yyyyMMdd)&lt;/b&gt;&#10;full_date, fiscal_period&#10;month, quarter, year" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="820" y="355" width="190" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dimReason" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D4A017;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="335" width="190" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimReasonHdr" value="dim_adjustment_reason" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#B8860B;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="335" width="190" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimReasonBody" value="&lt;b style=&quot;color:#1F3864&quot;&gt;reason_sk (PK)&lt;/b&gt;&#10;reason_code, description&#10;category, profile_id" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="355" width="190" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dimCarrier" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D4A017;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="335" width="190" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimCarrierHdr" value="dim_carrier" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#B8860B;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="335" width="190" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimCarrierBody" value="&lt;b style=&quot;color:#1F3864&quot;&gt;carrier_sk (PK)&lt;/b&gt;&#10;carrier_id, carrier_name" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="355" width="190" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dimPo" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D4A017;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="335" width="190" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimPoHdr" value="dim_purchase_order" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#B8860B;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="335" width="190" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="dimPoBody" value="&lt;b style=&quot;color:#1F3864&quot;&gt;purchase_order_sk (PK)&lt;/b&gt;&#10;purchase_order_id&#10;vendor_id, status" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="355" width="190" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- Facts label -->
+        <mxCell id="vbFactsLabel" value="CONFORMED FACTS (12 tables, liquid-clustered on facility + date)" style="text;html=1;align=left;fontSize=10;fontStyle=1;fontColor=#595959;" vertex="1" parent="1">
+          <mxGeometry x="820" y="420" width="820" height="14" as="geometry"/>
+        </mxCell>
+
+        <!-- Facts row 1 -->
+        <mxCell id="factSnap" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4EA;strokeColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="820" y="445" width="195" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="factSnapHdr" value="fact_inventory_snapshot" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#1B5E20;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="820" y="445" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="factSnapBody" value="item_sk, facility_sk, location_sk&#10;business_unit_sk, date_sk&#10;on_hand, allocated, available&#10;outside_staging, pick_locn, ilpn&#10;&lt;i&gt;replaces IROO + ITEM_SNAPSHOT&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="820" y="465" width="195" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="factTxn" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4EA;strokeColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="445" width="195" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="factTxnHdr" value="fact_inventory_transaction" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#1B5E20;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="445" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="factTxnBody" value="pix_entry_id, item_sk, facility_sk&#10;date_sk, reason_sk&#10;signed_quantity, grouping_tag&#10;source_transaction_type&#10;&lt;i&gt;replaces QROO transactions&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="465" width="195" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="factCc" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4EA;strokeColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="445" width="195" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="factCcHdr" value="fact_cycle_count_adjustment" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#1B5E20;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="445" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="factCcBody" value="pix_entry_id, item_sk, facility_sk&#10;reason_sk, count_session_id&#10;adjustment_qty&#10;&lt;i&gt;backs GE_CS_CYCL_CNT_ADJMT&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="465" width="195" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="factDt" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4EA;strokeColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="445" width="195" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="factDtHdr" value="fact_inventory_daily_total" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#1B5E20;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="445" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="factDtBody" value="item_sk, facility_sk, date_sk&#10;total_on_hand&#10;&lt;i&gt;backs GE_CS_INVN_DLY_TOTAL&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="465" width="195" height="65" as="geometry"/>
+        </mxCell>
+
+        <!-- Facts row 2 -->
+        <mxCell id="factRcv" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4EA;strokeColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="820" y="540" width="195" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="factRcvHdr" value="fact_receiving_event" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#1B5E20;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="820" y="540" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="factRcvBody" value="asn_id, asn_line_id&#10;item_sk, facility_sk, date_sk&#10;purchase_order_sk&#10;ordered_qty, received_qty&#10;&lt;i&gt;backs ITEM_FIRST_RCPT etc.&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="820" y="560" width="195" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="factPp" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4EA;strokeColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="540" width="195" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="factPpHdr" value="fact_pickpack_event" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#1B5E20;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="540" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="factPpBody" value="olpn_id, item_sk, facility_sk&#10;order_id, packed_qty&#10;destination_facility_id&#10;&lt;i&gt;outbound pick/pack lifecycle&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="560" width="195" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="factIl" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4EA;strokeColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="540" width="195" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="factIlHdr" value="fact_ilpn_lifecycle" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#1B5E20;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="540" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="factIlBody" value="ilpn_id, facility_sk, item_sk&#10;asn_id, purchase_order_id&#10;current/prev/dest location&#10;&lt;i&gt;backs PSE_CASE_V&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="560" width="195" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="factPh" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FCE7E7;strokeColor=#9B1C1C;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="540" width="195" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="factPhHdr" value="fact_pharmacy_transport" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#9B1C1C;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="540" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="factPhBody" value="transport_variant ('OH'/'PA')&#10;olpn_id, destination_facility&#10;ext_pharmacy_routeid&#10;&lt;i style=&quot;color:#9B1C1C&quot;&gt;controlled substances (regulated)&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="560" width="195" height="65" as="geometry"/>
+        </mxCell>
+
+        <!-- Facts row 3 -->
+        <mxCell id="factTs" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4EA;strokeColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="820" y="635" width="195" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="factTsHdr" value="fact_transportation_shipment" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#1B5E20;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="820" y="635" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="factTsBody" value="shipment_id, carrier_sk&#10;origin_facility_sk, destination&#10;pallets, product_class&#10;&lt;i&gt;V_LOAD_SHEETS header&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="820" y="655" width="195" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="factLs" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4EA;strokeColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="635" width="195" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="factLsHdr" value="fact_load_sheet" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#1B5E20;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="635" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="factLsBody" value="shipment_sk, item_sk&#10;order_id, stop_sequence&#10;ship_qty, pallets&#10;&lt;i&gt;V_LOAD_SHEETS detail + V_GESC&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="655" width="195" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="factTk" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4EA;strokeColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="635" width="195" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="factTkHdr" value="fact_task_completion" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#1B5E20;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="635" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="factTkBody" value="task_id, item_sk, facility_sk&#10;task_type_id, quantity&#10;&lt;i&gt;labor productivity&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="655" width="195" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="mvCmp" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4EA;strokeColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="635" width="195" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvCmpHdr" value="mv_inventory_compare" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#FFFFFF;fillColor=#1B5E20;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="635" width="195" height="18" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvCmpBody" value="(materialized view on snapshot)&#10;facility, item, on_hand, allocated&#10;&lt;i&gt;backs CCS_INV_COMPARE_V&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="655" width="195" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Compatibility view layer -->
+        <mxCell id="vbCompLabel" value="COMPATIBILITY VIEW LAYER (51 views, one per Snowflake view shape)" style="text;html=1;align=left;fontSize=10;fontStyle=1;fontColor=#595959;" vertex="1" parent="1">
+          <mxGeometry x="820" y="735" width="820" height="14" as="geometry"/>
+        </mxCell>
+        <mxCell id="vbCompBg" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EAF1F8;strokeColor=#2E75B6;" vertex="1" parent="1">
+          <mxGeometry x="820" y="760" width="820" height="200" as="geometry"/>
+        </mxCell>
+        <mxCell id="vbCompTitle" value="Same column shapes as Version A. Power BI sees no difference." style="text;html=1;align=left;fontSize=10;fontStyle=1;fontColor=#1F3864;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="820" y="765" width="820" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="vbCompTplLabel" value="Template-then-filter pattern (collapses ~40 of 51 views to ~6 templates):" style="text;html=1;align=left;fontSize=9;fontStyle=1;fontFamily=monospace;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="820" y="790" width="820" height="14" as="geometry"/>
+        </mxCell>
+        <mxCell id="vbCompTplBody" value="v_biceps_iroo  →  v_biceps_iroo_d0001, _d0044, _d0050, _d0061, _d0070, _d0080&#10;v_biceps_qroo  →  6 per-DC variants (same pattern)&#10;v_ccs_item_snapshot  →  v_hbc_item_snapshot_d0080, v_asf, v_brm, v_ffm, v_okg, v_okp&#10;v_hbc_iroo_d0080  =  v_biceps_iroo WHERE profile_id = 'D0080'" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="820" y="805" width="820" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="vbCompExpLabel" value="Explicit (non-templatable) views:" style="text;html=1;align=left;fontSize=9;fontStyle=1;fontFamily=monospace;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="820" y="865" width="820" height="14" as="geometry"/>
+        </mxCell>
+        <mxCell id="vbCompExpBody" value="v_ge_cs_invn_dly_total, v_ge_cs_adjustment_reason, v_ge_cs_cycl_cnt_adjmt_dtlv, v_ge_cs_transaction_dtl&#10;v_ccs_inv_compare, v_ccs_iroo, v_ccs_qroo, v_ccs_item_snapshot&#10;v_hbc_pharmacy_transport_oh, v_hbc_pharmacy_transport_pa&#10;v_gesc_closed_loads, v_load_sheets, v_gesc_wm_inventory&#10;v_pse_case, v_sis, v_item_first_rcpt, v_time_diff&#10;&lt;i&gt;misha_test_v: confirmed dev artifact, intentionally not migrated. Retire at cutover.&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontFamily=monospace;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="820" y="880" width="820" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Decision banner -->
+        <mxCell id="banner" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1F3864;strokeColor=#1F3864;" vertex="1" parent="1">
+          <mxGeometry x="140" y="1010" width="1420" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="bannerText" value="&lt;b style=&quot;color:white;font-size:13px&quot;&gt;Decision input: A is low-risk and mechanical. B is the expert opinionated remodel, collapses ~40 views to ~6 templates, adds clustering, simpler maintenance.&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;color:white;font-size:11px&quot;&gt;Both expose identical Power BI surfaces via the compatibility layer. Same query, same result, different engine room.&lt;/span&gt;" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="140" y="1010" width="1420" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Power BI box -->
+        <mxCell id="pbi" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F2C811;strokeColor=#7B6300;" vertex="1" parent="1">
+          <mxGeometry x="560" y="1100" width="580" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="pbiText" value="&lt;b style=&quot;font-size:13px&quot;&gt;Power BI (51 datasets, same workbooks)&lt;/b&gt;&lt;br&gt;&lt;i style=&quot;color:#7B6300;font-size:10px&quot;&gt;Repoints to either Gold version with identical column shapes&lt;/i&gt;" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="1100" width="580" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrows from A and B to Power BI -->
+        <mxCell id="arrowA" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#7B6300;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="390" y="565" as="sourcePoint"/>
+            <mxPoint x="700" y="1100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arrowB" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#7B6300;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1230" y="960" as="sourcePoint"/>
+            <mxPoint x="1000" y="1100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
