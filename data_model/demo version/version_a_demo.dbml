@@ -1,0 +1,401 @@
+// =====================================================================
+// Giant Eagle POC - Version A: Lift-and-Shift (DEMO VERSION)
+// Simplified for presentation: Core Bronze tables + Representative views
+// ⚠️ Bronze = Synthetic placeholder data for POC only
+// =====================================================================
+
+Project version_a_demo {
+  database_type: 'Databricks Delta Lake'
+  Note: '''
+    VERSION A PROBLEM:
+    - Views query Bronze tables directly
+    - SQL logic duplicated across 40+ views
+    - Change 1 column? Update 40+ view definitions
+    - Fix 1 JOIN bug? Copy-paste to 40+ views
+  '''
+}
+
+// =====================================================================
+// BRONZE LAYER - Core Tables (Synthetic POC Data)
+// =====================================================================
+
+TableGroup bronze_layer {
+  bronze.item_master_ite_item
+  bronze.item_master_ite_item_package
+  bronze.dcinventory_dci_inventory
+  bronze.dcinventory_dci_location
+  bronze.pix_pix_pix_entry
+  bronze.inventory_management_inm_adjustment_reason_code
+}
+
+Table bronze.item_master_ite_item {
+  pk bigint [pk]
+  item_id string [not null, note: 'Natural key']
+  profile_id string [not null, note: 'D0001, D0044, D0080 = Facility codes']
+  description string
+  lpn_per_tier int
+  tiers_per_pallet int
+  unit_price decimal
+  ext_gegl_dcxx_virtual_whse string
+  created_timestamp timestamp
+  __hevo__marked_deleted string [default: 'FALSE']
+
+  Note: 'POC Bronze: Item master. Queried by ALL 51 views.'
+}
+
+Table bronze.item_master_ite_item_package {
+  item_pk bigint [ref: > bronze.item_master_ite_item.pk]
+  standard_quantity_uom_id string [note: 'UNIT or PACK']
+  height decimal
+  width decimal
+  length decimal
+  weight decimal
+  volume decimal
+
+  Note: 'Package dimensions (UNIT and PACK rows per item)'
+}
+
+Table bronze.dcinventory_dci_inventory {
+  inventory_id string [pk]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string [note: 'D0001, D0044, D0080, etc.']
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  on_hand decimal
+  allocated decimal
+  to_be_filled decimal
+  is_in_transit string
+  created_timestamp timestamp
+
+  Note: 'POC Bronze: Inventory quantities by item/facility/location'
+}
+
+Table bronze.dcinventory_dci_location {
+  location_id string [pk]
+  facility_id string
+  location_barcode string
+  location_type string [note: 'PICK, RESERVE, STAGING']
+  aisle string
+  bay string
+  level string
+
+  Note: 'POC Bronze: Warehouse locations'
+}
+
+Table bronze.pix_pix_pix_entry {
+  pix_entry_id string [pk]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  reason_code_id string [ref: > bronze.inventory_management_inm_adjustment_reason_code.reason_code_id]
+  source_transaction_type string [note: 'ADJUSTMENT, CYCLE_COUNT, RECEIVING']
+  adjustment_qty decimal
+  created_timestamp timestamp
+
+  Note: 'POC Bronze: Inventory adjustments (PIX entries)'
+}
+
+Table bronze.inventory_management_inm_adjustment_reason_code {
+  reason_code_id string [pk]
+  reason_code string [note: 'PIX, CYCLE_COUNT, DAMAGE']
+  reason_description string
+  profile_id string
+
+  Note: 'POC Bronze: Adjustment reason codes'
+}
+
+// =====================================================================
+// GOLD LAYER - CCS Views (Cross-facility, shared)
+// =====================================================================
+
+TableGroup gold_ccs_views {
+  gold_version_a.ccs_iroo_v
+  gold_version_a.ccs_qroo_v
+  gold_version_a.ccs_item_snapshot_v
+}
+
+Table gold_version_a.ccs_iroo_v {
+  profile_id string
+  facility_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  lpnpertier int
+  unit_height decimal
+  location_barcode string [ref: > bronze.dcinventory_dci_location.location_barcode]
+  has_inv string
+
+  Note: '''
+    VIEW: All items with inventory across all facilities.
+    Queries: item_master + item_package + dci_inventory + dci_location
+    Full JOIN logic embedded in view definition.
+  '''
+}
+
+Table gold_version_a.ccs_qroo_v {
+  profile_id string
+  facility_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  on_hand_qty decimal
+  location_barcode string [ref: > bronze.dcinventory_dci_location.location_barcode]
+
+  Note: '''
+    VIEW: Quick reference on-hand only.
+    Queries: item_master + dci_inventory + dci_location
+    Similar JOIN logic to ccs_iroo_v but different SELECT.
+  '''
+}
+
+Table gold_version_a.ccs_item_snapshot_v {
+  profile_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  snapshot_date date
+  on_hand_qty decimal
+  allocated_qty decimal
+
+  Note: '''
+    VIEW: Daily item snapshot aggregated.
+    Queries: item_master + dci_inventory
+    Different aggregation, same Bronze sources.
+  '''
+}
+
+// =====================================================================
+// GOLD LAYER - BICEPS Business Unit Views (14 views total)
+// Showing pattern: 1 base view + 6 facility-specific variants
+// =====================================================================
+
+TableGroup gold_biceps_iroo {
+  gold_version_a.biceps_iroo_v
+  gold_version_a.biceps_iroo_v_d0001
+  gold_version_a.biceps_iroo_v_d0044
+  gold_version_a.biceps_iroo_v_d0080
+}
+
+Table gold_version_a.biceps_iroo_v {
+  profile_id string
+  facility_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  lpnpertier int
+  unit_height decimal
+  location_barcode string [ref: > bronze.dcinventory_dci_location.location_barcode]
+  has_inv string
+
+  Note: '''
+    VIEW: BICEPS inventory (all 6 DCs).
+    IDENTICAL SQL to ccs_iroo_v except filters to BICEPS business unit.
+    Problem: Duplicated JOIN logic from ccs_iroo_v.
+  '''
+}
+
+Table gold_version_a.biceps_iroo_v_d0001 {
+  profile_id string
+  facility_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  lpnpertier int
+  location_barcode string
+
+  Note: '''
+    VIEW: IDENTICAL SQL to biceps_iroo_v + WHERE profile_id IN ('D0001','D0008')
+    Problem: Duplicates biceps_iroo_v logic with just a WHERE clause change.
+  '''
+}
+
+Table gold_version_a.biceps_iroo_v_d0044 {
+  profile_id string
+  facility_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  lpnpertier int
+  location_barcode string
+
+  Note: '''
+    VIEW: IDENTICAL SQL to biceps_iroo_v + WHERE profile_id = 'D0044'
+    Problem: Duplicates biceps_iroo_v logic with just a WHERE clause change.
+  '''
+}
+
+Table gold_version_a.biceps_iroo_v_d0080 {
+  profile_id string
+  facility_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  lpnpertier int
+  location_barcode string
+
+  Note: '''
+    VIEW: IDENTICAL SQL to biceps_iroo_v + WHERE profile_id = 'D0080'
+    Problem: Duplicates biceps_iroo_v logic with just a WHERE clause change.
+
+    ⚠️ THERE ARE 3 MORE VARIANTS: d0050, d0061, d0070 (not shown)
+  '''
+}
+
+TableGroup gold_biceps_qroo {
+  gold_version_a.biceps_qroo_v
+  gold_version_a.biceps_qroo_v_d0001
+  gold_version_a.biceps_qroo_v_d0044
+  gold_version_a.biceps_qroo_v_d0080
+}
+
+Table gold_version_a.biceps_qroo_v {
+  profile_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  on_hand_qty decimal
+
+  Note: '''
+    VIEW: BICEPS quick reference (all 6 DCs).
+    IDENTICAL SQL to ccs_qroo_v except filters to BICEPS.
+    Problem: Duplicated JOIN logic from ccs_qroo_v.
+  '''
+}
+
+Table gold_version_a.biceps_qroo_v_d0001 {
+  profile_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  on_hand_qty decimal
+
+  Note: '''
+    VIEW: IDENTICAL SQL to biceps_qroo_v + WHERE profile_id IN ('D0001','D0008')
+    Problem: Duplicates biceps_qroo_v logic.
+  '''
+}
+
+Table gold_version_a.biceps_qroo_v_d0044 {
+  profile_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  on_hand_qty decimal
+
+  Note: 'VIEW: IDENTICAL SQL to biceps_qroo_v + WHERE profile_id = D0044'
+}
+
+Table gold_version_a.biceps_qroo_v_d0080 {
+  profile_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  on_hand_qty decimal
+
+  Note: '''
+    VIEW: IDENTICAL SQL to biceps_qroo_v + WHERE profile_id = D0080
+
+    ⚠️ THERE ARE 3 MORE VARIANTS: d0050, d0061, d0070 (not shown)
+  '''
+}
+
+// =====================================================================
+// GOLD LAYER - HBC Business Unit Views (Abbreviated)
+// Same pattern as BICEPS: 7 IROO + 7 QROO = 14 views
+// =====================================================================
+
+TableGroup gold_hbc_views {
+  gold_version_a.hbc_iroo_v
+  gold_version_a.hbc_qroo_v
+}
+
+Table gold_version_a.hbc_iroo_v {
+  profile_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  lpnpertier int
+  location_barcode string [ref: > bronze.dcinventory_dci_location.location_barcode]
+
+  Note: '''
+    VIEW: HBC inventory (all 6 DCs).
+    IDENTICAL SQL to biceps_iroo_v except filters to HBC business unit.
+    Problem: Same JOIN logic duplicated again.
+
+    ⚠️ HBC also has 6 facility variants (d0001, d0044, d0050, d0061, d0070, d0080)
+  '''
+}
+
+Table gold_version_a.hbc_qroo_v {
+  profile_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  on_hand_qty decimal
+
+  Note: '''
+    VIEW: HBC quick reference.
+    IDENTICAL SQL to biceps_qroo_v except filters to HBC.
+
+    ⚠️ HBC also has 6 facility variants (d0001, d0044, d0050, d0061, d0070, d0080)
+  '''
+}
+
+// =====================================================================
+// GOLD LAYER - GE_CS Views (Giant Eagle Custom/Shared)
+// =====================================================================
+
+TableGroup gold_ge_cs_views {
+  gold_version_a.ge_cs_cycl_cnt_adjmt_dtlv
+  gold_version_a.ge_cs_transaction_dtl_v
+}
+
+Table gold_version_a.ge_cs_cycl_cnt_adjmt_dtlv {
+  pix_entry_id string [ref: > bronze.pix_pix_pix_entry.pix_entry_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  adjustment_qty decimal
+  reason_code string [ref: > bronze.inventory_management_inm_adjustment_reason_code.reason_code]
+  created_timestamp timestamp
+
+  Note: '''
+    VIEW: Cycle count adjustment details.
+    Queries: pix_entry + item_master + adjustment_reason_code
+    Different Bronze sources, same problem: direct queries with embedded JOINs.
+  '''
+}
+
+Table gold_version_a.ge_cs_transaction_dtl_v {
+  pix_entry_id string [ref: > bronze.pix_pix_pix_entry.pix_entry_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  source_transaction_type string
+  adjustment_qty decimal
+  reason_code string [ref: > bronze.inventory_management_inm_adjustment_reason_code.reason_code]
+
+  Note: '''
+    VIEW: All inventory transactions.
+    Queries: pix_entry + item_master + location + adjustment_reason_code
+    Similar JOINs to ge_cs_cycl_cnt_adjmt_dtlv but different filter/SELECT.
+  '''
+}
+
+// =====================================================================
+// THE PROBLEM VISUALIZED
+// =====================================================================
+
+// Note: In this diagram you can see:
+//
+// 1. BRONZE LAYER (orange tables)
+//    - 6 core tables that are queried by ALL views
+//    - Each table has foreign key relationships
+//
+// 2. GOLD VIEWS (blue tables)
+//    - CCS views: Query Bronze directly with full JOINs
+//    - BICEPS views: Duplicate CCS logic + add business unit filter
+//    - BICEPS variants: Duplicate BICEPS logic + add facility filter
+//    - HBC views: Duplicate CCS/BICEPS logic + different BU filter
+//    - GE_CS views: Query Bronze directly with different JOINs
+//
+// 3. THE MAINTENANCE NIGHTMARE:
+//    - Want to rename item_master.description → item_description?
+//      → Update 40+ view definitions
+//    - Fix a JOIN bug in the item_master + item_package logic?
+//      → Copy-paste fix to 40+ views
+//    - Add a new column to item_master?
+//      → Update 40+ views
+//
+// 4. TOTAL VIEW COUNT (not all shown in diagram):
+//    - CCS: 4 views
+//    - GE_CS: 4 views
+//    - BICEPS: 14 views (1 base + 6 IROO variants + 1 base + 6 QROO variants)
+//    - HBC: 14 views (same pattern)
+//    - ASF: 14 views (same pattern)
+//    - BRM: 2 views (only 1 DC, no variants)
+//    - Top-level: 2 views (UNION ALL of BU views)
+//    = 51 total views
+//
+// 5. WHY THIS HAPPENED:
+//    - Lift-and-shift from Snowflake
+//    - Minimal transformation to get POC working fast
+//    - Business unit isolation (separate views per BU)
+//    - Facility isolation (separate views per DC)
+//    - No centralized dimension/fact layer
+//
+// This is what Version B fixes with dimensional modeling + template pattern.
+// =====================================================================

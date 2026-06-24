@@ -1,0 +1,89 @@
+-- Databricks notebook source
+-- DBTITLE 1,Gold Lift-and-Shift: All 50 Views
+-- MAGIC %python
+-- MAGIC # =====================================================================
+-- MAGIC # Giant Eagle: 03_gold_lift_shift_all_views
+-- MAGIC # VERSION A: 1:1 port of 50 Snowflake MAWM_ODM views to Databricks SQL.
+-- MAGIC # Validated against original DDL (GE Snowflake Views document).
+-- MAGIC # Column shapes: IROO BU=19, BICEPS IROO=18, ITEM_SNAPSHOT=26, QROO=30.
+-- MAGIC # =====================================================================
+-- MAGIC #
+-- MAGIC # CUSTOMER CONFIGURATION
+-- MAGIC # Update these 4 values to match your Databricks environment:
+-- MAGIC # =====================================================================
+-- MAGIC
+-- MAGIC CATALOG        = "ge_poc"              # Target Unity Catalog (CHANGE THIS)
+-- MAGIC GOLD_SCHEMA    = "gold_lift_shift"     # Schema where views will be created (CHANGE THIS)
+-- MAGIC BRONZE_SCHEMA  = "bronze"             # Schema where Manhattan WMS base tables live (CHANGE THIS)
+-- MAGIC SQL_FILE_PATH  = "/Workspace/Users/lawrence.kyei@databricks.com/ge_poc/gold_lift_shift_ddl.sql"
+-- MAGIC                                        # Path to the SQL DDL file - all 50 CREATE VIEW statements (CHANGE THIS)
+-- MAGIC
+-- MAGIC # =====================================================================
+-- MAGIC # WHAT THIS SCRIPT DOES
+-- MAGIC # =====================================================================
+-- MAGIC # Reads gold_lift_shift_ddl.sql and executes all 50 CREATE VIEW
+-- MAGIC # statements. The SQL file contains fully-qualified references to:
+-- MAGIC #
+-- MAGIC #   ge_poc.bronze.*              -> Your Manhattan WMS tables (from Lakeflow Connect)
+-- MAGIC #   ge_poc.gold_lift_shift.*     -> Cross-view references within this layer
+-- MAGIC #
+-- MAGIC # IF YOU CHANGE CATALOG OR SCHEMA NAMES:
+-- MAGIC # You must also find-and-replace in gold_lift_shift_ddl.sql:
+-- MAGIC #   ge_poc.bronze          -> {your_catalog}.{your_bronze_schema}
+-- MAGIC #   ge_poc.gold_lift_shift -> {your_catalog}.{your_gold_schema}
+-- MAGIC #
+-- MAGIC # WHAT YOU NEED BEFORE RUNNING:
+-- MAGIC # 1. Catalog and schemas created (run 00_setup.sql first)
+-- MAGIC # 2. Bronze tables populated with Manhattan WMS data via Lakeflow Connect
+-- MAGIC #    (or use sample scripts 01/02 for POC testing)
+-- MAGIC # 3. The SQL file path above pointing to the validated DDL
+-- MAGIC #
+-- MAGIC # SNOWFLAKE-TO-DATABRICKS TRANSLATIONS ALREADY APPLIED:
+-- MAGIC # - AGISIGHT_PROD.MAWM_ODM.DEFAULT_* -> {catalog}.{bronze}.default_*
+-- MAGIC # - ge_oracle.GE_CS_INVN_CONTROL     -> {catalog}.{bronze}.ge_cs_invn_control
+-- MAGIC # - FROM DUAL                        -> removed
+-- MAGIC # - __HEVO__MARKED_DELETED = FALSE    -> = 'FALSE' (string, not boolean)
+-- MAGIC # - SYSDATE()                        -> current_timestamp()
+-- MAGIC # - TO_CHAR(date, 'MM/DD/YYYY')      -> DATE_FORMAT(date, 'MM/dd/yyyy')
+-- MAGIC # - CURRENT_DATE() - 1               -> DATE_SUB(CURRENT_DATE(), 1)
+-- MAGIC # - JSON_STORE:"Fields"...            -> GET_JSON_OBJECT(...)
+-- MAGIC # - Oracle (+) outer join             -> explicit LEFT JOIN
+-- MAGIC # - ORDER BY inside subqueries        -> removed (Databricks disallows)
+-- MAGIC # - CONVERT_TIMEZONE, NVL, GREATEST   -> kept as-is (natively supported)
+-- MAGIC # =====================================================================
+-- MAGIC
+-- MAGIC import re
+-- MAGIC
+-- MAGIC spark.sql(f"USE CATALOG {CATALOG}")
+-- MAGIC spark.sql(f"USE SCHEMA {GOLD_SCHEMA}")
+-- MAGIC
+-- MAGIC with open(SQL_FILE_PATH, "r") as f:
+-- MAGIC     sql_text = f.read()
+-- MAGIC
+-- MAGIC statements = [s.strip() for s in re.split(r';\s*\n', sql_text)
+-- MAGIC               if s.strip() and any(l.strip() and not l.strip().startswith('--') for l in s.strip().split('\n'))]
+-- MAGIC
+-- MAGIC print(f"Found {len(statements)} SQL statements")
+-- MAGIC
+-- MAGIC success, failed = 0, []
+-- MAGIC for i, stmt in enumerate(statements):
+-- MAGIC     if stmt.upper().startswith(('USE ', '--')):
+-- MAGIC         continue
+-- MAGIC     try:
+-- MAGIC         spark.sql(stmt)
+-- MAGIC         success += 1
+-- MAGIC     except Exception as e:
+-- MAGIC         view_match = re.search(r'VIEW\s+(\w+)', stmt, re.IGNORECASE)
+-- MAGIC         name = view_match.group(1) if view_match else f'stmt_{i}'
+-- MAGIC         failed.append((name, str(e)[:120]))
+-- MAGIC
+-- MAGIC print(f"\nResults: {success} created, {len(failed)} failed")
+-- MAGIC if failed:
+-- MAGIC     print("\nFailures:")
+-- MAGIC     for name, err in failed:
+-- MAGIC         print(f"  {name}: {err}")
+-- MAGIC else:
+-- MAGIC     print("All views created successfully.")
+-- MAGIC
+-- MAGIC views = spark.sql(f"SHOW VIEWS IN {CATALOG}.{GOLD_SCHEMA}").collect()
+-- MAGIC print(f"\nTotal views in {CATALOG}.{GOLD_SCHEMA}: {len(views)}")

@@ -1,0 +1,590 @@
+// =====================================================================
+// Giant Eagle POC - Version A: Lift-and-Shift Architecture
+// All 36 Bronze tables + All 51 Gold views with relationships
+// ⚠️ Bronze = Synthetic placeholder data for POC only (scripts 01-02)
+// =====================================================================
+
+Project version_a {
+  database_type: 'Databricks Delta Lake'
+  Note: 'Version A queries Bronze tables directly. SQL logic duplicated across 40+ views.'
+}
+
+// =====================================================================
+// BRONZE LAYER - 36 Tables (Synthetic/Placeholder Data)
+// =====================================================================
+
+Table bronze.item_master_ite_item {
+  pk bigint [pk]
+  item_id string [not null, note: 'Natural key']
+  profile_id string [not null, note: 'Facility code: D0001, D0044, etc.']
+  short_description string
+  description string
+  long_description string
+  lpn_per_tier int
+  tiers_per_pallet int
+  unit_price decimal
+  ext_gegl_dcxx_virtual_whse string [note: 'Virtual warehouse']
+  ext_gegl_dc33_virtual_whse string
+  ext_gegl_department string
+  ext_gegl_product_size string
+  created_timestamp timestamp
+  updated_timestamp timestamp
+  __hevo__marked_deleted string [default: 'FALSE']
+}
+
+Table bronze.item_master_ite_item_package {
+  item_pk bigint [ref: > bronze.item_master_ite_item.pk]
+  standard_quantity_uom_id string [note: 'UNIT, PACK, CASE']
+  quantity int
+  height decimal
+  width decimal
+  length decimal
+  weight decimal
+  volume decimal
+}
+
+Table bronze.dcinventory_dci_inventory {
+  inventory_id string [pk]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  org_id string
+  facility_id string [note: 'D0001, D0044, D0080, etc.']
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  inventory_container_id string
+  on_hand decimal
+  allocated decimal
+  to_be_filled decimal
+  is_in_transit string
+  inventory_attribute1 string [note: 'Status/lot codes']
+  created_timestamp timestamp
+  updated_timestamp timestamp
+}
+
+Table bronze.dcinventory_dci_location {
+  location_id string [pk]
+  facility_id string
+  profile_id string
+  location_barcode string
+  location_type string [note: 'PICK, RESERVE, STAGING']
+  aisle string
+  bay string
+  level string
+}
+
+Table bronze.dcinventory_dci_ilpn {
+  ilpn_id string [pk]
+  org_id string
+  asn_id string [ref: > bronze.receiving_rcv_asn.asn_id]
+  purchase_order_id string
+  current_location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  previous_location_id string
+  destination_location_id string
+  status string
+  purge_date timestamp
+  created_timestamp timestamp
+  updated_timestamp timestamp
+  updated_by string
+}
+
+Table bronze.dcinventory_dci_location_item_assignment {
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  primary_location string
+  pick_sequence int
+}
+
+Table bronze.dcinventory_dci_location_capacity_usage {
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  used_volume decimal
+  available_volume decimal
+  used_weight decimal
+  available_weight decimal
+}
+
+Table bronze.dcinventory_dci_container_condition {
+  container_condition_id string [pk]
+  condition_code string
+  description string
+}
+
+Table bronze.pix_pix_pix_entry {
+  pix_entry_id string [pk]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  reference_id string
+  reason_code_id string [ref: > bronze.inventory_management_inm_adjustment_reason_code.reason_code_id]
+  source_transaction_type string
+  adjustment_qty decimal
+  user_id string
+  created_timestamp timestamp
+  inventory_attribute1 string
+}
+
+Table bronze.inventory_management_inm_adjustment_reason_code {
+  reason_code_id string [pk]
+  reason_code string [note: 'PIX, CYCLE_COUNT, DAMAGE, etc.']
+  reason_description string
+  profile_id string
+  is_active string
+}
+
+Table bronze.receiving_rcv_asn {
+  asn_id string [pk]
+  purchase_order_id string [ref: > bronze.receiving_rcv_purchase_order.purchase_order_id]
+  facility_id string
+  status string [note: 'EXPECTED, IN_PROGRESS, CLOSED']
+  expected_receipt_date timestamp
+  created_timestamp timestamp
+}
+
+Table bronze.receiving_rcv_asn_line {
+  asn_line_id string [pk]
+  asn_id string [ref: > bronze.receiving_rcv_asn.asn_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  ordered_qty decimal
+  received_qty decimal
+}
+
+Table bronze.receiving_rcv_purchase_order {
+  purchase_order_id string [pk]
+  facility_id string
+  vendor_id string
+  order_date date
+  status string
+}
+
+Table bronze.receiving_rcv_purchase_order_line {
+  po_line_id string [pk]
+  purchase_order_id string [ref: > bronze.receiving_rcv_purchase_order.purchase_order_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  ordered_qty decimal
+  unit_price decimal
+}
+
+Table bronze.receiving_rcv_purchase_order_status {
+  status_id string [pk]
+  purchase_order_id string [ref: > bronze.receiving_rcv_purchase_order.purchase_order_id]
+  status_code string
+  status_timestamp timestamp
+}
+
+Table bronze.receiving_rcv_receipt {
+  receipt_id string [pk]
+  asn_id string [ref: > bronze.receiving_rcv_asn.asn_id]
+  facility_id string
+  receipt_date timestamp
+  user_id string
+}
+
+Table bronze.receiving_rcv_lpn {
+  lpn_id string [pk]
+  receipt_id string [ref: > bronze.receiving_rcv_receipt.receipt_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  quantity decimal
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+}
+
+Table bronze.pickpack_ppk_olpn {
+  olpn_id string [pk]
+  order_id string [ref: > bronze.dcorder_dco_order.order_id]
+  facility_id string
+  status string
+  created_timestamp timestamp
+}
+
+Table bronze.pickpack_ppk_olpn_detail {
+  olpn_detail_id string [pk]
+  olpn_id string [ref: > bronze.pickpack_ppk_olpn.olpn_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  picked_qty decimal
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+}
+
+Table bronze.pickpack_tsk_task_detail {
+  task_detail_id string [pk]
+  task_id string [ref: > bronze.task_tsk_task.task_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  from_location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  to_location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  quantity decimal
+}
+
+Table bronze.task_tsk_task {
+  task_id string [pk]
+  task_type string [note: 'PICK, REPLENISH, PUTAWAY, COUNT']
+  facility_id string
+  status string
+  assigned_user_id string
+  priority int
+  created_timestamp timestamp
+  completed_timestamp timestamp
+}
+
+Table bronze.task_tsk_task_detail {
+  task_detail_id string [pk]
+  task_id string [ref: > bronze.task_tsk_task.task_id]
+  reference_id string
+  detail_status string
+}
+
+Table bronze.dcorder_dco_order {
+  order_id string [pk]
+  facility_id string
+  customer_id string
+  order_date date
+  requested_ship_date date
+  status string
+}
+
+Table bronze.dcorder_dco_order_line {
+  order_line_id string [pk]
+  order_id string [ref: > bronze.dcorder_dco_order.order_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  ordered_qty decimal
+  allocated_qty decimal
+  shipped_qty decimal
+}
+
+Table bronze.dcorder_dco_original_order {
+  original_order_id string [pk]
+  external_order_id string
+  order_source string
+}
+
+Table bronze.dcorder_dco_original_order_line {
+  original_order_line_id string [pk]
+  original_order_id string [ref: > bronze.dcorder_dco_original_order.original_order_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  ordered_qty decimal
+}
+
+Table bronze.organization_org_organization {
+  org_id string [pk]
+  org_name string
+  org_type string
+}
+
+Table bronze.facility_fac_facility {
+  facility_id string [pk]
+  organization_id string [ref: > bronze.organization_org_organization.org_id]
+  facility_name string
+  facility_type string
+  address string
+}
+
+Table bronze.shipment_shp_shipment {
+  shipment_id string [pk]
+  facility_id string
+  carrier_id string [ref: > bronze.carrier_car_carrier.carrier_id]
+  ship_date date
+  status string
+}
+
+Table bronze.shipment_shp_stop {
+  stop_id string [pk]
+  shipment_id string [ref: > bronze.shipment_shp_shipment.shipment_id]
+  stop_sequence int
+  destination_facility_id string
+  arrival_time timestamp
+}
+
+Table bronze.shipment_shp_shipment_note {
+  note_id string [pk]
+  shipment_id string [ref: > bronze.shipment_shp_shipment.shipment_id]
+  note_text string
+  created_timestamp timestamp
+}
+
+Table bronze.shipment_transport_order_movement {
+  movement_id string [pk]
+  transportation_order_id string [ref: > bronze.routing_rtg_transportation_order.transportation_order_id]
+  shipment_id string [ref: > bronze.shipment_shp_shipment.shipment_id]
+  movement_date timestamp
+}
+
+Table bronze.routing_rtg_transportation_order {
+  transportation_order_id string [pk]
+  carrier_id string [ref: > bronze.carrier_car_carrier.carrier_id]
+  order_date date
+  status string
+}
+
+Table bronze.routing_rtg_transportation_order_line {
+  to_line_id string [pk]
+  transportation_order_id string [ref: > bronze.routing_rtg_transportation_order.transportation_order_id]
+  shipment_id string [ref: > bronze.shipment_shp_shipment.shipment_id]
+  load_sequence int
+}
+
+Table bronze.carrier_car_carrier {
+  carrier_id string [pk]
+  carrier_name string
+  carrier_code string
+  is_active string
+}
+
+Table bronze.ge_cs_invn_control {
+  control_id string [pk]
+  facility_id string
+  snapshot_date date
+  total_on_hand decimal
+  total_allocated decimal
+  created_timestamp timestamp
+}
+
+// =====================================================================
+// GOLD VERSION A LAYER - 51 Views (Direct Bronze Queries)
+// =====================================================================
+
+// ----- CCS (Corporate/Shared) Views (4 views) -----
+Table gold_version_a.ccs_inv_compare_v [note: 'View: Compares main DC vs outside staging inventory'] {
+  inventory_facility string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  sum_on_hand decimal
+  sum_allocated decimal
+  profile_id string
+  out_stg_facility string
+  out_stg_on_hand decimal
+}
+
+Table gold_version_a.ccs_iroo_v [note: 'View: All items with inventory across all facilities'] {
+  profile_id string [ref: > bronze.item_master_ite_item.profile_id]
+  facility_id string
+  ext_gegldcxxvirtualwhse string
+  virtwhse string
+  itemid string [ref: > bronze.item_master_ite_item.item_id]
+  lpnpertier int
+  tierperpallet int
+  unit_height decimal
+  unit_width decimal
+  unit_length decimal
+  unit_weight decimal
+  location_barcode string [ref: > bronze.dcinventory_dci_location.location_barcode]
+  unitvolume decimal
+  packvolume decimal
+  has_inv string
+}
+
+Table gold_version_a.ccs_item_snapshot_v [note: 'View: Daily item snapshot aggregated across facilities'] {
+  profile_id string [ref: > bronze.item_master_ite_item.profile_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  snapshot_date date
+  on_hand_qty decimal
+  allocated_qty decimal
+  available_qty decimal
+}
+
+Table gold_version_a.ccs_qroo_v [note: 'View: Quick reference on-hand only (QROO) for all facilities'] {
+  profile_id string [ref: > bronze.item_master_ite_item.profile_id]
+  facility_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  on_hand_qty decimal
+  location_barcode string [ref: > bronze.dcinventory_dci_location.location_barcode]
+}
+
+// ----- GE_CS (Giant Eagle Custom/Shared) Views (4 views) -----
+Table gold_version_a.ge_cs_adjustment_reason_v [note: 'View: All adjustment reason codes'] {
+  reason_code_id string [ref: > bronze.inventory_management_inm_adjustment_reason_code.reason_code_id]
+  reason_code string
+  reason_description string
+  profile_id string
+  is_active string
+}
+
+Table gold_version_a.ge_cs_cycl_cnt_adjmt_dtlv [note: 'View: Cycle count adjustment details'] {
+  pix_entry_id string [ref: > bronze.pix_pix_pix_entry.pix_entry_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  adjustment_qty decimal
+  reason_code string [ref: > bronze.inventory_management_inm_adjustment_reason_code.reason_code]
+  inventory_attribute1 string
+  user_id string
+  created_timestamp timestamp
+}
+
+Table gold_version_a.ge_cs_invn_dly_total_v [note: 'View: Daily inventory totals by facility'] {
+  facility_id string
+  snapshot_date date
+  total_on_hand decimal
+  total_allocated decimal
+  total_available decimal
+}
+
+Table gold_version_a.ge_cs_transaction_dtl_v [note: 'View: All inventory transactions (PIX entries)'] {
+  pix_entry_id string [ref: > bronze.pix_pix_pix_entry.pix_entry_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  source_transaction_type string
+  adjustment_qty decimal
+  reason_code string [ref: > bronze.inventory_management_inm_adjustment_reason_code.reason_code]
+  created_timestamp timestamp
+}
+
+// ----- BICEPS BU Views (14 views: 7 IROO + 7 QROO) -----
+Table gold_version_a.biceps_iroo_v [note: 'View: BICEPS inventory (template for all 6 DCs)'] {
+  profile_id string [ref: > bronze.item_master_ite_item.profile_id]
+  facility_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  lpnpertier int
+  unit_height decimal
+  location_barcode string [ref: > bronze.dcinventory_dci_location.location_barcode]
+  has_inv string
+}
+
+Table gold_version_a.biceps_iroo_v_d0001 [note: 'View: WHERE profile_id IN (D0001, D0008)'] {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+}
+
+Table gold_version_a.biceps_iroo_v_d0044 [note: 'View: WHERE profile_id = D0044'] {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+}
+
+Table gold_version_a.biceps_iroo_v_d0050 [note: 'View: WHERE profile_id = D0050'] {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+}
+
+Table gold_version_a.biceps_iroo_v_d0061 [note: 'View: WHERE profile_id = D0061'] {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+}
+
+Table gold_version_a.biceps_iroo_v_d0070 [note: 'View: WHERE profile_id = D0070'] {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+}
+
+Table gold_version_a.biceps_iroo_v_d0080 [note: 'View: WHERE profile_id = D0080'] {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+}
+
+Table gold_version_a.biceps_qroo_v [note: 'View: BICEPS quick reference (template)'] {
+  profile_id string [ref: > bronze.item_master_ite_item.profile_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  on_hand_qty decimal
+}
+
+Table gold_version_a.biceps_qroo_v_d0001 [note: 'View: WHERE profile_id IN (D0001, D0008)'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+Table gold_version_a.biceps_qroo_v_d0044 [note: 'View: WHERE profile_id = D0044'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+Table gold_version_a.biceps_qroo_v_d0050 [note: 'View: WHERE profile_id = D0050'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+Table gold_version_a.biceps_qroo_v_d0061 [note: 'View: WHERE profile_id = D0061'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+Table gold_version_a.biceps_qroo_v_d0070 [note: 'View: WHERE profile_id = D0070'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+Table gold_version_a.biceps_qroo_v_d0080 [note: 'View: WHERE profile_id = D0080'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+// ----- HBC BU Views (14 views: 7 IROO + 7 QROO) -----
+// Same pattern as BICEPS, different business unit filter
+Table gold_version_a.hbc_iroo_v [note: 'View: HBC inventory (template)'] {
+  profile_id string [ref: > bronze.item_master_ite_item.profile_id]
+  facility_id string
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  lpnpertier int
+  location_barcode string [ref: > bronze.dcinventory_dci_location.location_barcode]
+}
+
+// HBC variants: d0001, d0044, d0050, d0061, d0070, d0080 (6 views)
+// (Abbreviated for brevity - same pattern as BICEPS)
+
+Table gold_version_a.hbc_qroo_v [note: 'View: HBC quick reference (template)'] {
+  profile_id string [ref: > bronze.item_master_ite_item.profile_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  on_hand_qty decimal
+}
+
+// HBC QROO variants: d0001, d0044, d0050, d0061, d0070, d0080 (6 views)
+
+// ----- ASF BU Views (14 views: 7 IROO + 7 QROO) -----
+// Same pattern
+Table gold_version_a.asf_iroo_v [note: 'View: ASF inventory (template)'] {
+  profile_id string [ref: > bronze.item_master_ite_item.profile_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+}
+
+// ASF IROO + QROO variants (12 views)
+
+// ----- BRM BU Views (2 views: 1 IROO + 1 QROO) -----
+// BRM only has 1 DC so no variants
+Table gold_version_a.brm_iroo_v [note: 'View: BRM inventory (single DC)'] {
+  profile_id string [ref: > bronze.item_master_ite_item.profile_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+}
+
+Table gold_version_a.brm_qroo_v [note: 'View: BRM quick reference (single DC)'] {
+  profile_id string [ref: > bronze.item_master_ite_item.profile_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  on_hand_qty decimal
+}
+
+// ----- Top-level aggregated views (2 views) -----
+Table gold_version_a.iroo_v [note: 'View: Union of all BU IROO views'] {
+  profile_id string
+  item_id string
+  facility_id string
+  location_barcode string
+}
+
+Table gold_version_a.qroo_v [note: 'View: Union of all BU QROO views'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+// =====================================================================
+// KEY INSIGHT: Version A Problem
+// =====================================================================
+// Every view directly queries Bronze with full JOIN logic.
+// Change item_master schema? Update 40+ view definitions.
+// Fix a JOIN bug? Copy-paste to 40+ views.
+// This is the maintenance nightmare Version B solves.
+// =====================================================================

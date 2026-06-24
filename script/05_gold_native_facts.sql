@@ -1,7 +1,8 @@
+-- Databricks notebook source
 -- =====================================================================
--- Giant Eagle POC: 05_gold_native_facts.sql
+-- Giant Eagle: 05_gold_native_facts.sql
 -- VERSION B (lakehouse-native), part 2: CONFORMED FACTS
--- 12 fact tables covering the full domain space of the 51 Snowflake views.
+-- 12 fact tables covering the full domain space of the 50 Snowflake views.
 -- All clustered on (facility_sk, date_sk) for predicate pushdown.
 -- =====================================================================
 
@@ -68,7 +69,7 @@ GROUP BY di.item_sk, df.facility_sk, dl.location_sk, dbu.business_unit_sk, dci.i
 -- =====================================================================
 -- fact_inventory_transaction
 -- Every PIX entry. Replaces *_QROO_V transaction aggregates.
--- Adjustments, receipts, shipments — everything that moves quantity.
+-- Adjustments, receipts, shipments - everything that moves quantity.
 -- =====================================================================
 CREATE OR REPLACE TABLE fact_inventory_transaction (
   transaction_sk                 BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1 INCREMENT BY 1),

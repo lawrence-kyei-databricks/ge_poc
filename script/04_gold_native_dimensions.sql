@@ -1,8 +1,9 @@
+-- Databricks notebook source
 -- =====================================================================
--- Giant Eagle POC: 04_gold_native_dimensions.sql
+-- Giant Eagle: 04_gold_native_dimensions.sql
 -- VERSION B (lakehouse-native), part 1: CONFORMED DIMENSIONS
 -- The de facto Gold layer designed for the lakehouse.
--- Covers all dimensional needs of the 51 Snowflake views.
+-- Covers all dimensional needs of the 50 Snowflake views.
 -- =====================================================================
 
 USE CATALOG ge_poc;
@@ -45,7 +46,7 @@ CREATE OR REPLACE TABLE dim_facility (
   virtual_warehouse_group        STRING,             -- e.g. 'DC80-85'
   region                         STRING,
   business_unit_code             STRING,             -- denormalized for query convenience
-  is_active                      BOOLEAN DEFAULT true
+  is_active                      BOOLEAN
 ) USING DELTA;
 
 INSERT INTO dim_facility (facility_id, facility_short, facility_name, virtual_warehouse_group, region, business_unit_code) VALUES
@@ -98,10 +99,10 @@ CREATE OR REPLACE TABLE dim_item (
   pack_weight                    DECIMAL(18,4),
   pack_volume                    DECIMAL(18,4),
   -- SCD2 tracking columns (scaffolding for Phase 2 - prevents breaking schema changes)
-  effective_from                 TIMESTAMP DEFAULT current_timestamp(),
-  effective_to                   TIMESTAMP DEFAULT timestamp('9999-12-31'),
-  is_current                     BOOLEAN DEFAULT true,
-  version_number                 INT DEFAULT 1
+  effective_from                 TIMESTAMP,
+  effective_to                   TIMESTAMP,
+  is_current                     BOOLEAN,
+  version_number                 INT
 ) USING DELTA
 COMMENT 'Item master dimension. SCD2 columns declared but not actively tracked in POC.';
 
@@ -117,10 +118,18 @@ SELECT
   ip1.height, ip1.width, ip1.length, ip1.weight, ip1.volume,
   ip2.height, ip2.width, ip2.length, ip2.weight, ip2.volume
 FROM ge_poc.bronze.default_item_master_ite_item ite
-LEFT JOIN ge_poc.bronze.default_item_master_ite_item_package ip1
-  ON ite.pk = ip1.item_pk AND ip1.standard_quantity_uom_id = 'UNIT' AND ip1.quantity = 1
-LEFT JOIN ge_poc.bronze.default_item_master_ite_item_package ip2
-  ON ite.pk = ip2.item_pk AND ip2.standard_quantity_uom_id = 'PACK' AND ip2.quantity = 1
+LEFT JOIN (
+  SELECT item_pk, height, width, length, weight, volume,
+         ROW_NUMBER() OVER (PARTITION BY item_pk ORDER BY height) AS rn
+  FROM ge_poc.bronze.default_item_master_ite_item_package
+  WHERE standard_quantity_uom_id = 'UNIT' AND quantity = 1
+) ip1 ON ite.pk = ip1.item_pk AND ip1.rn = 1
+LEFT JOIN (
+  SELECT item_pk, height, width, length, weight, volume,
+         ROW_NUMBER() OVER (PARTITION BY item_pk ORDER BY height) AS rn
+  FROM ge_poc.bronze.default_item_master_ite_item_package
+  WHERE standard_quantity_uom_id = 'PACK' AND quantity = 1
+) ip2 ON ite.pk = ip2.item_pk AND ip2.rn = 1
 WHERE ite.__hevo__marked_deleted = 'FALSE';
 
 -- =====================================================================
@@ -162,7 +171,7 @@ CREATE OR REPLACE TABLE dim_location (
   aisle                          STRING,
   bay                            STRING,
   level                          STRING,
-  is_active                      BOOLEAN DEFAULT true
+  is_active                      BOOLEAN
 ) USING DELTA;
 
 INSERT INTO dim_location (location_id, location_barcode, facility_id, location_type, aisle, bay, level)
@@ -202,7 +211,7 @@ CREATE OR REPLACE TABLE dim_adjustment_reason (
   profile_id                     STRING,
   reason_description             STRING,
   category                       STRING,
-  is_active                      BOOLEAN DEFAULT true
+  is_active                      BOOLEAN
 ) USING DELTA;
 
 INSERT INTO dim_adjustment_reason (reason_code, profile_id, reason_description, category)

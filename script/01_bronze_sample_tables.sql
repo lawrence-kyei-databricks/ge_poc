@@ -1,9 +1,10 @@
+-- Databricks notebook source
+-- DBTITLE 1,Bronze Sample Tables
 -- =====================================================================
--- Giant Eagle POC: 01_bronze_sample_tables.sql  (EXPANDED)
--- Reverse-engineered Manhattan base tables covering ALL 35 base tables
--- referenced across the 51 Snowflake views.
+-- Giant Eagle: 01_bronze_sample_tables.sql
+-- Manhattan WMS base tables (35 tables) referenced by the 50 gold views.
 -- Column shapes derived from view DDLs and Manhattan ODM conventions.
--- These get superseded by real Lakeflow Connect Bronze when source pipeline lands.
+-- Superseded by Lakeflow Connect Bronze when production pipeline lands.
 -- =====================================================================
 
 USE CATALOG ge_poc;
@@ -34,8 +35,11 @@ CREATE OR REPLACE TABLE default_item_master_ite_item (
   updated_timestamp              TIMESTAMP,
   __hevo__ingested_at            TIMESTAMP,
   __hevo__loaded_at              TIMESTAMP,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE',
-  __hevo__source_modified_at     TIMESTAMP
+  __hevo__marked_deleted         STRING,
+  __hevo__source_modified_at     TIMESTAMP,
+  process                        STRING,
+  product_class                  STRING,
+  unit_cost                      DECIMAL(18,4)
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_item_master_ite_item_package (
@@ -47,7 +51,8 @@ CREATE OR REPLACE TABLE default_item_master_ite_item_package (
   length                         DECIMAL(18,4),
   weight                         DECIMAL(18,4),
   volume                         DECIMAL(18,4),
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  profile_id                     STRING
 ) USING DELTA;
 
 -- ---------------------------------------------------------------------
@@ -69,7 +74,8 @@ CREATE OR REPLACE TABLE default_dcinventory_dci_inventory (
   created_timestamp              TIMESTAMP,
   updated_timestamp              TIMESTAMP,
   __hevo__loaded_at              TIMESTAMP,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  ilpn_id                        STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_dcinventory_dci_location (
@@ -79,7 +85,8 @@ CREATE OR REPLACE TABLE default_dcinventory_dci_location (
   location_barcode               STRING,
   location_type                  STRING,
   aisle                          STRING, bay STRING, level STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  storage_uom_id                 STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_dcinventory_dci_ilpn (
@@ -95,7 +102,7 @@ CREATE OR REPLACE TABLE default_dcinventory_dci_ilpn (
   created_timestamp              TIMESTAMP,
   updated_timestamp              TIMESTAMP,
   updated_by                     STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_dcinventory_dci_location_item_assignment (
@@ -103,19 +110,22 @@ CREATE OR REPLACE TABLE default_dcinventory_dci_location_item_assignment (
   item_id                        STRING NOT NULL,
   facility_id                    STRING,
   assignment_type                STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  updated_timestamp              TIMESTAMP,
+  org_id                         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_dcinventory_dci_location_capacity_usage (
   location_id                    STRING NOT NULL,
   capacity_pct                   DECIMAL(18,4),
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  updated_timestamp              TIMESTAMP
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_dcinventory_dci_container_condition (
   inventory_container_id         STRING NOT NULL,
   condition_id                   STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 -- ---------------------------------------------------------------------
@@ -140,7 +150,7 @@ CREATE OR REPLACE TABLE default_pix_pix_pix_entry (
   created_timestamp              TIMESTAMP,
   updated_timestamp              TIMESTAMP,
   __hevo__loaded_at              TIMESTAMP,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_inventory_management_inm_adjustment_reason_code (
@@ -148,7 +158,12 @@ CREATE OR REPLACE TABLE default_inventory_management_inm_adjustment_reason_code 
   profile_id                     STRING NOT NULL,
   description                    STRING,
   category                       STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  created_timestamp              TIMESTAMP,
+  updated_timestamp              TIMESTAMP,
+  __hevo__ingested_at            TIMESTAMP,
+  __hevo__loaded_at              TIMESTAMP,
+  __hevo__marked_deleted         STRING,
+  __hevo__source_modified_at     TIMESTAMP
 ) USING DELTA;
 
 -- ---------------------------------------------------------------------
@@ -161,7 +176,8 @@ CREATE OR REPLACE TABLE default_receiving_rcv_asn (
   asn_status                     STRING,
   created_timestamp              TIMESTAMP,
   updated_timestamp              TIMESTAMP,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  asn_origin_type_id             STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_receiving_rcv_asn_line (
@@ -170,7 +186,8 @@ CREATE OR REPLACE TABLE default_receiving_rcv_asn_line (
   item_id                        STRING,
   ordered_quantity               DECIMAL(18,4),
   received_quantity              DECIMAL(18,4),
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  org_id                         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_receiving_rcv_purchase_order (
@@ -178,7 +195,8 @@ CREATE OR REPLACE TABLE default_receiving_rcv_purchase_order (
   org_id                         STRING,
   purchase_order_status          STRING,
   vendor_id                      STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  closed                         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_receiving_rcv_purchase_order_line (
@@ -186,7 +204,7 @@ CREATE OR REPLACE TABLE default_receiving_rcv_purchase_order_line (
   purchase_order_line_id         STRING NOT NULL,
   item_id                        STRING,
   ordered_quantity               DECIMAL(18,4),
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_receiving_rcv_purchase_order_status (
@@ -200,7 +218,7 @@ CREATE OR REPLACE TABLE default_receiving_rcv_receipt (
   item_id                        STRING,
   received_quantity              DECIMAL(18,4),
   received_at                    TIMESTAMP,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_receiving_rcv_lpn (
@@ -208,7 +226,7 @@ CREATE OR REPLACE TABLE default_receiving_rcv_lpn (
   asn_id                         STRING,
   item_id                        STRING,
   quantity                       DECIMAL(18,4),
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 -- ---------------------------------------------------------------------
@@ -224,7 +242,8 @@ CREATE OR REPLACE TABLE default_pickpack_ppk_olpn (
   ext_pharmacy_routeid           STRING,
   ext_pharmacy_stop_id           STRING,
   created_timestamp              TIMESTAMP,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  updated_timestamp              TIMESTAMP
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_pickpack_ppk_olpn_detail (
@@ -245,7 +264,8 @@ CREATE OR REPLACE TABLE default_pickpack_ppk_olpn_detail (
   created_timestamp              TIMESTAMP,
   ext_pharmacy_routeid           STRING,
   ext_pharmacy_stop_id           STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  updated_timestamp              TIMESTAMP
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_pickpack_tsk_task_detail (
@@ -254,7 +274,7 @@ CREATE OR REPLACE TABLE default_pickpack_tsk_task_detail (
   item_id                        STRING,
   facility_id                    STRING,
   type_id                        STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 -- ---------------------------------------------------------------------
@@ -267,7 +287,7 @@ CREATE OR REPLACE TABLE default_task_tsk_task (
   status                         STRING,
   updated_timestamp              TIMESTAMP,
   __hevo__loaded_at              TIMESTAMP,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_task_tsk_task_detail (
@@ -277,7 +297,7 @@ CREATE OR REPLACE TABLE default_task_tsk_task_detail (
   quantity                       DECIMAL(18,4),
   updated_timestamp              TIMESTAMP,
   __hevo__loaded_at              TIMESTAMP,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 -- ---------------------------------------------------------------------
@@ -287,7 +307,8 @@ CREATE OR REPLACE TABLE default_dcorder_dco_order (
   order_id                       STRING NOT NULL,
   org_id                         STRING,
   status                         STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  updated_timestamp              TIMESTAMP
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_dcorder_dco_order_line (
@@ -295,7 +316,8 @@ CREATE OR REPLACE TABLE default_dcorder_dco_order_line (
   order_line_id                  STRING NOT NULL,
   item_id                        STRING,
   quantity                       DECIMAL(18,4),
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  updated_timestamp              TIMESTAMP
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_dcorder_dco_original_order (
@@ -303,14 +325,15 @@ CREATE OR REPLACE TABLE default_dcorder_dco_original_order (
   org_id                         STRING,
   updated_timestamp              TIMESTAMP,
   __hevo__loaded_at              TIMESTAMP,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_dcorder_dco_original_order_line (
   order_id                       STRING NOT NULL,
   order_line_id                  STRING NOT NULL,
   item_id                        STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  updated_timestamp              TIMESTAMP
 ) USING DELTA;
 
 -- ---------------------------------------------------------------------
@@ -320,7 +343,10 @@ CREATE OR REPLACE TABLE default_organization_org_organization (
   org_id                         STRING NOT NULL,
   org_name                       STRING,
   org_type                       STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  facility_id                    STRING,
+  organization_id                STRING,
+  json_store                     STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_facility_fac_facility (
@@ -330,7 +356,7 @@ CREATE OR REPLACE TABLE default_facility_fac_facility (
   facility_address_city          STRING,
   facility_address_state         STRING,
   facility_address_postalcode    STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 -- ---------------------------------------------------------------------
@@ -344,7 +370,8 @@ CREATE OR REPLACE TABLE default_shipment_shp_shipment (
   climate_control_id             STRING,
   planned_size1_value            DECIMAL(18,4),
   ass_carrier_id                 STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING,
+  assigned_carrier_id            STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_shipment_shp_stop (
@@ -353,7 +380,7 @@ CREATE OR REPLACE TABLE default_shipment_shp_stop (
   org_id                         STRING,
   facility_id                    STRING,
   stop_sequence                  INT,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_shipment_shp_shipment_note (
@@ -366,7 +393,7 @@ CREATE OR REPLACE TABLE default_shipment_transport_order_movement (
   transportation_order_id        STRING,
   org_id                         STRING,
   delivery_stop_id               STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_routing_rtg_transportation_order (
@@ -375,19 +402,19 @@ CREATE OR REPLACE TABLE default_routing_rtg_transportation_order (
   origin_facility_id             STRING,
   destination_facility_id        STRING,
   planned_size1_value            DECIMAL(18,4),
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_routing_rtg_transportation_order_line (
   transportation_order_id        STRING NOT NULL,
   line_id                        STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 CREATE OR REPLACE TABLE default_carrier_car_carrier (
   carrier_id                     STRING NOT NULL,
   description                    STRING,
-  __hevo__marked_deleted         STRING DEFAULT 'FALSE'
+  __hevo__marked_deleted         STRING
 ) USING DELTA;
 
 -- ---------------------------------------------------------------------
@@ -401,6 +428,8 @@ CREATE OR REPLACE TABLE ge_cs_invn_control (
   analysis_end_date_time         TIMESTAMP,
   cycle_count_session_id         STRING
 ) USING DELTA
-COMMENT 'MOCK of external GE Oracle source (ge_oracle.ge_cs_invn_control). Replace with real integration in Phase 2.';
+COMMENT 'Mock of external GE Oracle source. Replace with real integration when available.';
+
+
 
 SHOW TABLES IN bronze;

@@ -1,0 +1,52 @@
+-- Databricks notebook source
+-- MAGIC %python
+-- MAGIC # =====================================================================
+-- MAGIC # Giant Eagle: 06_gold_native_compat_views.sql
+-- MAGIC # VERSION B (lakehouse-native), part 3: COMPATIBILITY VIEWS
+-- MAGIC # 50 compat views sourced from the dimensional model.
+-- MAGIC # Validated: all 50 match Version A column shapes (zero diffs).
+-- MAGIC # MISHA_TEST_V excluded (dev artifact, not a production report).
+-- MAGIC #
+-- MAGIC # WHAT THIS SCRIPT DOES:
+-- MAGIC #   Reads 06_compat_views_generated.sql and executes all 50 CREATE VIEW
+-- MAGIC #   statements in dependency order.
+-- MAGIC #
+-- MAGIC # WHAT YOU NEED BEFORE RUNNING:
+-- MAGIC #   1. Scripts 04 + 05 completed (dims + facts exist in gold_native)
+-- MAGIC #   2. Attached to a compute that supports Python
+-- MAGIC #
+-- MAGIC # VALIDATE AFTER:
+-- MAGIC #   Run 08_validate_compat_shapes.sql - expected result: zero diff rows.
+-- MAGIC # =====================================================================
+-- MAGIC 
+-- MAGIC import re
+-- MAGIC 
+-- MAGIC SQL_FILE_PATH = "/Workspace/Users/lawrence.kyei@databricks.com/ge_poc/06_compat_views_generated.sql"
+-- MAGIC 
+-- MAGIC spark.sql("USE CATALOG ge_poc")
+-- MAGIC spark.sql("USE SCHEMA gold_native")
+-- MAGIC 
+-- MAGIC with open(SQL_FILE_PATH, "r") as f:
+-- MAGIC     sql_text = f.read()
+-- MAGIC 
+-- MAGIC statements = [s.strip() for s in re.split(r';\s*\n', sql_text)
+-- MAGIC               if s.strip() and any(l.strip() and not l.strip().startswith('--') for l in s.strip().split('\n'))]
+-- MAGIC 
+-- MAGIC success, failures = 0, []
+-- MAGIC for stmt in statements:
+-- MAGIC     if stmt.upper().startswith(('USE ', '--')):
+-- MAGIC         continue
+-- MAGIC     try:
+-- MAGIC         spark.sql(stmt)
+-- MAGIC         success += 1
+-- MAGIC     except Exception as e:
+-- MAGIC         vm = re.search(r'VIEW\s+(\w+)', stmt, re.IGNORECASE)
+-- MAGIC         failures.append((vm.group(1) if vm else '?', str(e)[:80]))
+-- MAGIC 
+-- MAGIC print(f"Compat views created: {success}/{success + len(failures)}")
+-- MAGIC if failures:
+-- MAGIC     print("Failures:")
+-- MAGIC     for name, err in failures:
+-- MAGIC         print(f"  {name}: {err}")
+-- MAGIC else:
+-- MAGIC     print("ALL PASS - 50 compat views created successfully")

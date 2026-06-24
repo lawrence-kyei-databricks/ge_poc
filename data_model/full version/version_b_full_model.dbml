@@ -1,0 +1,993 @@
+// =====================================================================
+// Giant Eagle POC - Version B: Lakehouse-Native Star Schema
+// All 36 Bronze tables + 9 Dimensions + 12 Facts + 51 Compatibility Views
+// ⚠️ Bronze = Synthetic placeholder data for POC only (scripts 01-02)
+// =====================================================================
+
+Project version_b {
+  database_type: 'Databricks Delta Lake'
+  Note: '''
+    Version B uses dimensional modeling with liquid clustering.
+    Dimensions (1) join to Facts (∞) via surrogate keys.
+    Template pattern: 1 base view → N filtered variants.
+    Change dimension logic once → all 51 views inherit the fix.
+  '''
+}
+
+// =====================================================================
+// BRONZE LAYER - 36 Tables (Synthetic/Placeholder - Same as Version A)
+// In production, Dimensions/Facts source from manhattan_prod.silver.*
+// =====================================================================
+
+Table bronze.item_master_ite_item {
+  pk bigint [pk]
+  item_id string [not null]
+  profile_id string [not null, note: 'D0001, D0044, D0080, etc.']
+  description string
+  lpn_per_tier int
+  ext_gegl_dcxx_virtual_whse string
+  created_timestamp timestamp
+  __hevo__marked_deleted string [default: 'FALSE']
+  Note: 'POC Bronze: Sources dim_item. In prod, replaced by Silver SCD2.'
+}
+
+Table bronze.item_master_ite_item_package {
+  item_pk bigint [ref: > bronze.item_master_ite_item.pk]
+  standard_quantity_uom_id string [note: 'UNIT, PACK']
+  height decimal
+  width decimal
+  length decimal
+  weight decimal
+  volume decimal
+}
+
+Table bronze.dcinventory_dci_inventory {
+  inventory_id string [pk]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  location_id string
+  on_hand decimal
+  allocated decimal
+  to_be_filled decimal
+  is_in_transit string
+  inventory_attribute1 string
+  created_timestamp timestamp
+  Note: 'POC Bronze: Sources fact_inventory_snapshot. In prod, Silver CDC.'
+}
+
+Table bronze.dcinventory_dci_location {
+  location_id string [pk]
+  facility_id string
+  profile_id string
+  location_barcode string
+  location_type string [note: 'PICK, RESERVE, STAGING']
+  aisle string
+  bay string
+  level string
+  Note: 'POC Bronze: Sources dim_location. In prod, Silver SCD1.'
+}
+
+Table bronze.dcinventory_dci_ilpn {
+  ilpn_id string [pk]
+  asn_id string
+  current_location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  status string
+  created_timestamp timestamp
+}
+
+Table bronze.dcinventory_dci_location_item_assignment {
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  primary_location string
+}
+
+Table bronze.pix_pix_pix_entry {
+  pix_entry_id string [pk]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  reason_code_id string
+  source_transaction_type string
+  adjustment_qty decimal
+  created_timestamp timestamp
+  Note: 'POC Bronze: Sources fact_inventory_transaction, fact_cycle_count_adjustment.'
+}
+
+Table bronze.inventory_management_inm_adjustment_reason_code {
+  reason_code_id string [pk]
+  reason_code string [note: 'PIX, CYCLE_COUNT, DAMAGE']
+  reason_description string
+  profile_id string
+  Note: 'POC Bronze: Sources dim_adjustment_reason.'
+}
+
+Table bronze.receiving_rcv_asn {
+  asn_id string [pk]
+  purchase_order_id string
+  facility_id string
+  status string [note: 'EXPECTED, IN_PROGRESS, CLOSED']
+  expected_receipt_date timestamp
+  Note: 'POC Bronze: Sources fact_receiving_event.'
+}
+
+Table bronze.receiving_rcv_asn_line {
+  asn_line_id string [pk]
+  asn_id string [ref: > bronze.receiving_rcv_asn.asn_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  ordered_qty decimal
+  received_qty decimal
+}
+
+Table bronze.receiving_rcv_purchase_order {
+  purchase_order_id string [pk]
+  facility_id string
+  vendor_id string
+  order_date date
+}
+
+Table bronze.receiving_rcv_receipt {
+  receipt_id string [pk]
+  asn_id string [ref: > bronze.receiving_rcv_asn.asn_id]
+  facility_id string
+  receipt_date timestamp
+}
+
+Table bronze.pickpack_ppk_olpn {
+  olpn_id string [pk]
+  facility_id string
+  status string
+  created_timestamp timestamp
+  Note: 'POC Bronze: Sources fact_pick_event, fact_pack_event.'
+}
+
+Table bronze.pickpack_ppk_olpn_detail {
+  olpn_detail_id string [pk]
+  olpn_id string [ref: > bronze.pickpack_ppk_olpn.olpn_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  picked_qty decimal
+}
+
+Table bronze.task_tsk_task {
+  task_id string [pk]
+  task_type string [note: 'PICK, REPLENISH, PUTAWAY, COUNT']
+  facility_id string
+  status string
+  created_timestamp timestamp
+  completed_timestamp timestamp
+  Note: 'POC Bronze: Sources fact_task_completion.'
+}
+
+Table bronze.dcorder_dco_order {
+  order_id string [pk]
+  facility_id string
+  customer_id string
+  order_date date
+  requested_ship_date date
+  Note: 'POC Bronze: Sources fact_order_line.'
+}
+
+Table bronze.dcorder_dco_order_line {
+  order_line_id string [pk]
+  order_id string [ref: > bronze.dcorder_dco_order.order_id]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  ordered_qty decimal
+  allocated_qty decimal
+  shipped_qty decimal
+}
+
+Table bronze.facility_fac_facility {
+  facility_id string [pk]
+  organization_id string
+  facility_name string
+  facility_type string
+  Note: 'POC Bronze: Sources dim_facility.'
+}
+
+Table bronze.shipment_shp_shipment {
+  shipment_id string [pk]
+  facility_id string
+  carrier_id string
+  ship_date date
+  Note: 'POC Bronze: Sources fact_ship_event.'
+}
+
+Table bronze.carrier_car_carrier {
+  carrier_id string [pk]
+  carrier_name string
+  carrier_code string
+  Note: 'POC Bronze: Sources dim_carrier.'
+}
+
+// (Omitting remaining Bronze tables for brevity - same as Version A)
+
+// =====================================================================
+// GOLD VERSION B: DIMENSIONS (9 conformed dimensions)
+// These replace the duplicated SQL logic in Version A views
+// =====================================================================
+
+Table gold_native.dim_item {
+  item_sk bigint [pk, increment, note: 'Surrogate key']
+  item_id string [not null, unique, note: 'Natural key from Bronze']
+  profile_id string [note: 'D0001, D0044, D0080, etc.']
+  short_description string
+  description string
+  long_description string
+  lpn_per_tier int
+  tiers_per_pallet int
+  unit_price decimal
+  unit_height decimal [note: 'From UNIT package row']
+  unit_width decimal
+  unit_length decimal
+  unit_weight decimal
+  unit_volume decimal
+  pack_height decimal [note: 'From PACK package row']
+  pack_width decimal
+  pack_length decimal
+  pack_weight decimal
+  pack_volume decimal
+  ext_gegl_dcxx_virtual_whse string
+  ext_gegl_dc33_virtual_whse string
+  ext_gegl_department string
+  ext_gegl_product_size string
+  catch_weight_item string
+  average_weight decimal
+  display_uom_id string
+  style_suffix string
+  // SCD2 scaffolding (not yet implemented, prevents breaking changes in Phase 2)
+  effective_from timestamp [default: `current_timestamp()`]
+  effective_to timestamp [default: `cast('9999-12-31' as timestamp)`]
+  is_current boolean [default: true]
+  version_number int [default: 1]
+  created_at timestamp
+  updated_at timestamp
+
+  Indexes {
+    item_id [name: 'idx_item_natural_key']
+    profile_id [name: 'idx_item_profile']
+  }
+
+  Note: '''
+    Conformed item dimension. Denormalizes UNIT and PACK package rows.
+    Replaces item_master JOINs in all 51 Version A views.
+    SCD2 columns scaffolded but not yet active (prevents Phase 2 breaking changes).
+  '''
+}
+
+Table gold_native.dim_facility {
+  facility_sk bigint [pk, increment]
+  facility_id string [not null, unique, note: 'D0001, D0044, D0080, etc.']
+  facility_short string [note: 'Last 2 chars: 01, 44, 80']
+  facility_name string
+  virtual_warehouse_group string [note: 'DC80-85, DC01-08, etc.']
+  region string
+  business_unit_code string [note: 'BICEPS, HBC, ASF, BRM, etc.']
+  is_active boolean [default: true]
+  created_at timestamp
+  updated_at timestamp
+
+  Indexes {
+    facility_id [name: 'idx_facility_natural_key']
+    business_unit_code [name: 'idx_facility_bu']
+  }
+
+  Note: '''
+    Conformed facility dimension. Replaces facility_fac_facility JOINs.
+    Denormalizes business_unit_code for query convenience.
+  '''
+}
+
+Table gold_native.dim_location {
+  location_sk bigint [pk, increment]
+  location_id string [not null, unique]
+  location_barcode string
+  facility_id string [ref: > gold_native.dim_facility.facility_id]
+  profile_id string
+  location_type string [note: 'PICK, RESERVE, STAGING, RECEIVING']
+  aisle string
+  bay string
+  level string
+  is_active boolean [default: true]
+  created_at timestamp
+  updated_at timestamp
+
+  Indexes {
+    location_id [name: 'idx_location_natural_key']
+    facility_id [name: 'idx_location_facility']
+    location_type [name: 'idx_location_type']
+  }
+
+  Note: 'Conformed location dimension. Replaces dci_location JOINs.'
+}
+
+Table gold_native.dim_date {
+  date_sk bigint [pk, note: 'yyyyMMdd format: 20260617']
+  full_date date [unique, not null]
+  year int [note: '2026']
+  quarter int [note: '1-4']
+  month int [note: '1-12']
+  month_name string [note: 'January, February, ...']
+  day_of_month int [note: '1-31']
+  day_of_week int [note: '1=Sunday, 7=Saturday']
+  day_name string [note: 'Monday, Tuesday, ...']
+  week_of_year int [note: '1-53']
+  fiscal_year int
+  fiscal_quarter int
+  fiscal_period string [note: 'FY26-P06']
+  is_weekend boolean
+  is_holiday boolean
+  holiday_name string
+  created_at timestamp
+
+  Indexes {
+    full_date [name: 'idx_date_full_date']
+    fiscal_period [name: 'idx_date_fiscal_period']
+  }
+
+  Note: '''
+    Conformed date dimension. Pre-loaded with 10 years of dates.
+    Used by all fact tables for temporal joins and fiscal reporting.
+  '''
+}
+
+Table gold_native.dim_business_unit {
+  business_unit_sk bigint [pk, increment]
+  business_unit_code string [not null, unique, note: 'BICEPS, HBC, ASF, BRM, FFM, OKG, OKP, CCS']
+  business_unit_name string
+  primary_facility_id string [ref: > gold_native.dim_facility.facility_id]
+  facility_id_pattern string [note: 'D0031,D0032,... or ALL']
+  description string
+  is_active boolean [default: true]
+  created_at timestamp
+
+  Note: '''
+    Replaces BICEPS/HBC/ASF/BRM view name duplication.
+    Business unit becomes a column filter instead of 40+ separate views.
+  '''
+}
+
+Table gold_native.dim_adjustment_reason {
+  reason_sk bigint [pk, increment]
+  reason_code_id string [not null, unique]
+  reason_code string [note: 'PIX, CYCLE_COUNT, DAMAGE, RECEIVING_ADJUSTMENT']
+  reason_description string
+  category string [note: 'ADJUSTMENT, CYCLE_COUNT, DAMAGE, SCRATCH']
+  profile_id string
+  is_active boolean [default: true]
+  created_at timestamp
+
+  Note: 'Conformed adjustment reason dimension. Sources adjustment_reason_code table.'
+}
+
+Table gold_native.dim_user {
+  user_sk bigint [pk, increment]
+  user_id string [not null, unique]
+  user_name string
+  email string
+  role string
+  facility_id string [ref: > gold_native.dim_facility.facility_id]
+  is_active boolean [default: true]
+  created_at timestamp
+  updated_at timestamp
+
+  Note: 'User dimension for transaction attribution (PIX adjustments, task completions).'
+}
+
+Table gold_native.dim_organization {
+  organization_sk bigint [pk, increment]
+  org_id string [not null, unique]
+  org_name string
+  org_type string [note: 'WAREHOUSE, STORE, VENDOR']
+  parent_org_id string
+  is_active boolean [default: true]
+  created_at timestamp
+
+  Note: 'Organization hierarchy dimension.'
+}
+
+Table gold_native.dim_carrier {
+  carrier_sk bigint [pk, increment]
+  carrier_id string [not null, unique]
+  carrier_name string
+  carrier_code string [note: 'FEDEX, UPS, USPS, XPO']
+  carrier_type string
+  is_active boolean [default: true]
+  created_at timestamp
+
+  Note: 'Carrier dimension for shipment facts.'
+}
+
+// =====================================================================
+// GOLD VERSION B: FACTS (12 fact tables, all liquid clustered)
+// =====================================================================
+
+Table gold_native.fact_inventory_snapshot {
+  inventory_snapshot_sk bigint [pk, increment]
+  item_sk bigint [ref: > gold_native.dim_item.item_sk, note: '1:∞']
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk, note: '1:∞']
+  location_sk bigint [ref: > gold_native.dim_location.location_sk, note: '1:∞']
+  business_unit_sk bigint [ref: > gold_native.dim_business_unit.business_unit_sk, note: '1:∞']
+  date_sk bigint [ref: > gold_native.dim_date.date_sk, note: '1:∞']
+  inventory_container_type_id string [note: 'LOCATION, ILPN']
+  on_hand_qty decimal
+  allocated_qty decimal
+  available_qty decimal [note: 'on_hand - allocated']
+  to_be_filled_qty decimal
+  outside_staging_qty decimal [note: 'Sum where location_type = STAGING']
+  pick_location_qty decimal [note: 'Sum where container_type = LOCATION']
+  ilpn_qty decimal [note: 'Sum where container_type = ILPN']
+  has_inventory boolean
+  snapshot_taken_at timestamp
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster', note: 'CLUSTER BY (facility_sk, date_sk)']
+    item_sk [name: 'idx_fact_inv_item']
+  }
+
+  Note: '''
+    DAILY INVENTORY SNAPSHOT FACT.
+    Replaces: ccs_iroo_v, ccs_item_snapshot_v, biceps_iroo_v (and all variants).
+    Liquid clustered on (facility_sk, date_sk) for 10-100x query speedup.
+    Sources: dcinventory_dci_inventory → aggregated daily.
+  '''
+}
+
+Table gold_native.fact_inventory_transaction {
+  transaction_sk bigint [pk, increment]
+  pix_entry_id string [not null, unique]
+  item_sk bigint [ref: > gold_native.dim_item.item_sk]
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk]
+  date_sk bigint [ref: > gold_native.dim_date.date_sk]
+  reason_sk bigint [ref: > gold_native.dim_adjustment_reason.reason_sk]
+  source_transaction_type string [note: 'RECEIVING, SHIPPING, ADJUSTMENT, CYCLE_COUNT']
+  grouping_tag string [note: 'InventoryAdjustment, Scratch, etc.']
+  quantity decimal
+  signed_quantity decimal [note: 'Positive = receipt, Negative = shipment']
+  purchase_order_id string
+  purchase_order_line_id string
+  inventory_attribute1 string [note: 'Status/lot codes']
+  user_id string
+  created_at_utc timestamp
+  created_at_local timestamp
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster', note: 'CLUSTER BY (facility_sk, date_sk)']
+    pix_entry_id [name: 'idx_fact_txn_pix']
+  }
+
+  Note: '''
+    INVENTORY TRANSACTION FACT (PIX entries).
+    Replaces: ge_cs_transaction_dtl_v, ccs_qroo_v (transaction aggregates).
+    Every adjustment, receipt, shipment, cycle count.
+    Sources: pix_pix_pix_entry (Manhattan transactions).
+  '''
+}
+
+Table gold_native.fact_cycle_count_adjustment {
+  cycle_count_sk bigint [pk, increment]
+  pix_entry_id string [not null, unique, ref: > gold_native.fact_inventory_transaction.pix_entry_id]
+  item_sk bigint [ref: > gold_native.dim_item.item_sk]
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk]
+  reason_sk bigint [ref: > gold_native.dim_adjustment_reason.reason_sk]
+  count_session_id string [note: 'Groups adjustments from same cycle count session']
+  adjustment_qty decimal
+  expected_qty decimal
+  actual_qty decimal
+  variance_qty decimal
+  inventory_attribute1 string
+  user_id string
+  created_at_local timestamp
+
+  Indexes {
+    (facility_sk, count_session_id) [name: 'liquid_cluster']
+    pix_entry_id [name: 'idx_fact_cycle_pix']
+  }
+
+  Note: '''
+    CYCLE COUNT ADJUSTMENT FACT.
+    Replaces: ge_cs_cycl_cnt_adjmt_dtlv.
+    Subset of fact_inventory_transaction filtered to cycle count adjustments only.
+    Sources: pix_pix_pix_entry WHERE source_transaction_type = 'CYCLE_COUNT'.
+  '''
+}
+
+Table gold_native.fact_receiving_event {
+  receiving_sk bigint [pk, increment]
+  asn_id string [note: 'ASN (Advance Ship Notice) identifier']
+  asn_line_id string
+  receipt_id string
+  item_sk bigint [ref: > gold_native.dim_item.item_sk]
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk]
+  date_sk bigint [ref: > gold_native.dim_date.date_sk]
+  purchase_order_id string
+  vendor_id string
+  ordered_qty decimal
+  received_qty decimal
+  damaged_qty decimal
+  variance_qty decimal
+  expected_receipt_date date
+  actual_receipt_date date
+  received_at timestamp
+  user_id string
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster']
+    asn_id [name: 'idx_fact_rcv_asn']
+  }
+
+  Note: '''
+    RECEIVING EVENT FACT.
+    Every ASN line received with variances.
+    Sources: receiving_rcv_asn + receiving_rcv_asn_line + receiving_rcv_receipt.
+  '''
+}
+
+Table gold_native.fact_pick_event {
+  pick_sk bigint [pk, increment]
+  olpn_id string [note: 'Outbound LPN']
+  olpn_detail_id string
+  task_id string
+  item_sk bigint [ref: > gold_native.dim_item.item_sk]
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk]
+  date_sk bigint [ref: > gold_native.dim_date.date_sk]
+  from_location_sk bigint [ref: > gold_native.dim_location.location_sk]
+  to_location_sk bigint [ref: > gold_native.dim_location.location_sk]
+  order_id string
+  order_line_id string
+  requested_qty decimal
+  picked_qty decimal
+  variance_qty decimal
+  pick_start_time timestamp
+  pick_end_time timestamp
+  pick_duration_seconds int
+  user_id string
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster']
+    olpn_id [name: 'idx_fact_pick_olpn']
+  }
+
+  Note: '''
+    PICK EVENT FACT.
+    Every pick task executed (from reserve/pick locations to staging).
+    Sources: pickpack_ppk_olpn + pickpack_ppk_olpn_detail + task_tsk_task.
+  '''
+}
+
+Table gold_native.fact_pack_event {
+  pack_sk bigint [pk, increment]
+  olpn_id string
+  item_sk bigint [ref: > gold_native.dim_item.item_sk]
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk]
+  date_sk bigint [ref: > gold_native.dim_date.date_sk]
+  order_id string
+  packed_qty decimal
+  pack_station_id string
+  pack_start_time timestamp
+  pack_end_time timestamp
+  pack_duration_seconds int
+  user_id string
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster']
+  }
+
+  Note: 'PACK EVENT FACT. Packing station activity and pack rates.'
+}
+
+Table gold_native.fact_ship_event {
+  ship_sk bigint [pk, increment]
+  shipment_id string
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk]
+  date_sk bigint [ref: > gold_native.dim_date.date_sk]
+  carrier_sk bigint [ref: > gold_native.dim_carrier.carrier_sk]
+  destination_facility_id string
+  total_weight decimal
+  total_volume decimal
+  total_pallets int
+  ship_date date
+  estimated_delivery_date date
+  actual_delivery_date date
+  status string [note: 'SCHEDULED, SHIPPED, IN_TRANSIT, DELIVERED']
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster']
+    shipment_id [name: 'idx_fact_ship_id']
+  }
+
+  Note: 'SHIP EVENT FACT. Outbound shipment tracking with carrier and destination.'
+}
+
+Table gold_native.fact_order_line {
+  order_line_sk bigint [pk, increment]
+  order_id string
+  order_line_id string [not null, unique]
+  item_sk bigint [ref: > gold_native.dim_item.item_sk]
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk]
+  date_sk bigint [ref: > gold_native.dim_date.date_sk]
+  customer_id string
+  ordered_qty decimal
+  allocated_qty decimal
+  picked_qty decimal
+  shipped_qty decimal
+  cancelled_qty decimal
+  order_date date
+  requested_ship_date date
+  actual_ship_date date
+  order_status string [note: 'PENDING, ALLOCATED, PICKED, SHIPPED, CANCELLED']
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster']
+    order_id [name: 'idx_fact_order_id']
+  }
+
+  Note: 'ORDER LINE FACT. Customer orders from placement to fulfillment.'
+}
+
+Table gold_native.fact_purchase_order_line {
+  po_line_sk bigint [pk, increment]
+  purchase_order_id string
+  po_line_id string [not null, unique]
+  item_sk bigint [ref: > gold_native.dim_item.item_sk]
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk]
+  date_sk bigint [ref: > gold_native.dim_date.date_sk]
+  vendor_id string
+  ordered_qty decimal
+  received_qty decimal
+  rejected_qty decimal
+  unit_price decimal
+  total_cost decimal
+  order_date date
+  expected_delivery_date date
+  actual_delivery_date date
+  status string [note: 'OPEN, RECEIVED, CLOSED, CANCELLED']
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster']
+    purchase_order_id [name: 'idx_fact_po_id']
+  }
+
+  Note: 'PURCHASE ORDER LINE FACT. Inbound PO tracking from vendors.'
+}
+
+Table gold_native.fact_task_completion {
+  task_sk bigint [pk, increment]
+  task_id string [not null, unique]
+  task_type string [note: 'PICK, REPLENISH, PUTAWAY, COUNT, MOVE']
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk]
+  date_sk bigint [ref: > gold_native.dim_date.date_sk]
+  assigned_user_id string
+  completed_user_id string
+  priority int
+  status string [note: 'PENDING, IN_PROGRESS, COMPLETED, CANCELLED']
+  created_at timestamp
+  assigned_at timestamp
+  started_at timestamp
+  completed_at timestamp
+  task_duration_seconds int
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster']
+    task_id [name: 'idx_fact_task_id']
+  }
+
+  Note: 'TASK COMPLETION FACT. Warehouse task execution metrics and productivity.'
+}
+
+Table gold_native.fact_location_capacity {
+  capacity_sk bigint [pk, increment]
+  location_sk bigint [ref: > gold_native.dim_location.location_sk]
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk]
+  date_sk bigint [ref: > gold_native.dim_date.date_sk]
+  used_volume decimal
+  available_volume decimal
+  total_volume decimal
+  used_weight decimal
+  available_weight decimal
+  total_weight decimal
+  utilization_pct decimal [note: 'used / total * 100']
+  snapshot_at timestamp
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster']
+  }
+
+  Note: 'LOCATION CAPACITY FACT. Daily capacity utilization tracking by location.'
+}
+
+Table gold_native.fact_ilpn_movement {
+  movement_sk bigint [pk, increment]
+  ilpn_id string
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk]
+  date_sk bigint [ref: > gold_native.dim_date.date_sk]
+  from_location_sk bigint [ref: > gold_native.dim_location.location_sk]
+  to_location_sk bigint [ref: > gold_native.dim_location.location_sk]
+  movement_type string [note: 'PUTAWAY, PICK, REPLENISH, RELOCATE']
+  movement_timestamp timestamp
+  user_id string
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster']
+    ilpn_id [name: 'idx_fact_ilpn_id']
+  }
+
+  Note: 'ILPN MOVEMENT FACT. Inbound LPN tracking from receiving to putaway.'
+}
+
+// =====================================================================
+// GOLD VERSION B: COMPATIBILITY VIEWS (51 views using template pattern)
+// Same names and column shapes as Version A for Power BI compatibility
+// =====================================================================
+
+// ----- CCS Views (4 views) -----
+Table gold_native.ccs_inv_compare_v [note: 'View: Template - No variants'] {
+  inventory_facility string
+  item_id string
+  sum_on_hand decimal
+  sum_allocated decimal
+  profile_id string
+  out_stg_facility string
+  out_stg_on_hand decimal
+  Note: '''
+    SELECT from fact_inventory_snapshot joined to dimensions.
+    Compares main DC vs outside staging inventory.
+  '''
+}
+
+Table gold_native.ccs_iroo_v [note: 'View: Base template - Queries fact_inventory_snapshot'] {
+  profile_id string
+  facility_id string
+  ext_gegldcxxvirtualwhse string
+  virtwhse string
+  itemid string
+  lpnpertier int
+  tierperpallet int
+  unit_height decimal
+  unit_width decimal
+  unit_length decimal
+  unit_weight decimal
+  location_barcode string
+  unitvolume decimal
+  packvolume decimal
+  has_inv string
+  Note: '''
+    SELECT
+      di.profile_id, df.facility_id, di.ext_gegl_dcxx_virtual_whse, ...
+    FROM fact_inventory_snapshot fis
+    JOIN dim_item di ON fis.item_sk = di.item_sk
+    JOIN dim_facility df ON fis.facility_sk = df.facility_sk
+    LEFT JOIN dim_location dl ON fis.location_sk = dl.location_sk
+  '''
+}
+
+Table gold_native.ccs_item_snapshot_v [note: 'View: Daily snapshot aggregated'] {
+  profile_id string
+  item_id string
+  facility_id string
+  snapshot_date date
+  on_hand_qty decimal
+  allocated_qty decimal
+  available_qty decimal
+  Note: 'SELECT from fact_inventory_snapshot grouped by item, facility, date.'
+}
+
+Table gold_native.ccs_qroo_v [note: 'View: Quick reference on-hand only'] {
+  profile_id string
+  facility_id string
+  item_id string
+  on_hand_qty decimal
+  location_barcode string
+  Note: 'SELECT from fact_inventory_snapshot where has_inventory = true.'
+}
+
+// ----- GE_CS Views (4 views) -----
+Table gold_native.ge_cs_adjustment_reason_v [note: 'View: SELECT * FROM dim_adjustment_reason'] {
+  reason_code_id string
+  reason_code string
+  reason_description string
+  profile_id string
+  is_active string
+  Note: 'Direct passthrough of dim_adjustment_reason.'
+}
+
+Table gold_native.ge_cs_cycl_cnt_adjmt_dtlv [note: 'View: SELECT from fact_cycle_count_adjustment'] {
+  pix_entry_id string
+  item_id string
+  facility_id string
+  adjustment_qty decimal
+  reason_code string
+  inventory_attribute1 string
+  user_id string
+  created_timestamp timestamp
+  Note: '''
+    SELECT fcc.*, di.item_id, df.facility_id, dar.reason_code
+    FROM fact_cycle_count_adjustment fcc
+    JOIN dim_item di ON fcc.item_sk = di.item_sk
+    JOIN dim_facility df ON fcc.facility_sk = df.facility_sk
+    JOIN dim_adjustment_reason dar ON fcc.reason_sk = dar.reason_sk
+  '''
+}
+
+Table gold_native.ge_cs_invn_dly_total_v [note: 'View: Daily totals by facility'] {
+  facility_id string
+  snapshot_date date
+  total_on_hand decimal
+  total_allocated decimal
+  total_available decimal
+  Note: '''
+    SELECT df.facility_id, dd.full_date,
+           sum(on_hand_qty), sum(allocated_qty), sum(available_qty)
+    FROM fact_inventory_snapshot fis
+    JOIN dim_facility df ON fis.facility_sk = df.facility_sk
+    JOIN dim_date dd ON fis.date_sk = dd.date_sk
+    GROUP BY df.facility_id, dd.full_date
+  '''
+}
+
+Table gold_native.ge_cs_transaction_dtl_v [note: 'View: SELECT from fact_inventory_transaction'] {
+  pix_entry_id string
+  item_id string
+  facility_id string
+  location_id string
+  source_transaction_type string
+  adjustment_qty decimal
+  reason_code string
+  created_timestamp timestamp
+  Note: 'Joins fact_inventory_transaction to dimensions for natural keys.'
+}
+
+// ----- BICEPS Views (14 views: 1 base + 6 IROO variants + 1 base + 6 QROO variants) -----
+Table gold_native.v_biceps_iroo [note: 'View: TEMPLATE for 6 variants'] {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  unit_height decimal
+  location_barcode string
+  has_inv string
+  Note: '''
+    SELECT ...
+    FROM fact_inventory_snapshot fis
+    JOIN dim_item di ON fis.item_sk = di.item_sk
+    JOIN dim_facility df ON fis.facility_sk = df.facility_sk
+    JOIN dim_business_unit dbu ON fis.business_unit_sk = dbu.business_unit_sk
+    WHERE dbu.business_unit_code = 'BICEPS'
+  '''
+}
+
+Table gold_native.v_biceps_iroo_d0001 [note: 'View: SELECT * FROM v_biceps_iroo WHERE profile_id IN (D0001, D0008)'] {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+}
+
+Table gold_native.v_biceps_iroo_d0044 [note: 'View: SELECT * FROM v_biceps_iroo WHERE profile_id = D0044'] {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+}
+
+Table gold_native.v_biceps_iroo_d0050 [note: 'View: SELECT * FROM v_biceps_iroo WHERE profile_id = D0050'] {
+  profile_id string
+  facility_id string
+  item_id string
+}
+
+Table gold_native.v_biceps_iroo_d0061 [note: 'View: SELECT * FROM v_biceps_iroo WHERE profile_id = D0061'] {
+  profile_id string
+  facility_id string
+  item_id string
+}
+
+Table gold_native.v_biceps_iroo_d0070 [note: 'View: SELECT * FROM v_biceps_iroo WHERE profile_id = D0070'] {
+  profile_id string
+  facility_id string
+  item_id string
+}
+
+Table gold_native.v_biceps_iroo_d0080 [note: 'View: SELECT * FROM v_biceps_iroo WHERE profile_id = D0080'] {
+  profile_id string
+  facility_id string
+  item_id string
+}
+
+Table gold_native.v_biceps_qroo [note: 'View: TEMPLATE for 6 variants'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+  Note: '''
+    SELECT di.profile_id, di.item_id, fis.on_hand_qty
+    FROM fact_inventory_snapshot fis
+    JOIN dim_item di ON fis.item_sk = di.item_sk
+    JOIN dim_business_unit dbu ON fis.business_unit_sk = dbu.business_unit_sk
+    WHERE dbu.business_unit_code = 'BICEPS' AND fis.has_inventory = true
+  '''
+}
+
+Table gold_native.v_biceps_qroo_d0001 [note: 'View: SELECT * FROM v_biceps_qroo WHERE profile_id IN (D0001, D0008)'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+Table gold_native.v_biceps_qroo_d0044 [note: 'View: SELECT * FROM v_biceps_qroo WHERE profile_id = D0044'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+Table gold_native.v_biceps_qroo_d0050 [note: 'View: SELECT * FROM v_biceps_qroo WHERE profile_id = D0050'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+Table gold_native.v_biceps_qroo_d0061 [note: 'View: SELECT * FROM v_biceps_qroo WHERE profile_id = D0061'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+Table gold_native.v_biceps_qroo_d0070 [note: 'View: SELECT * FROM v_biceps_qroo WHERE profile_id = D0070'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+Table gold_native.v_biceps_qroo_d0080 [note: 'View: SELECT * FROM v_biceps_qroo WHERE profile_id = D0080'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+}
+
+// ----- HBC, ASF, BRM Views (same template pattern) -----
+// HBC: v_hbc_iroo + 6 variants, v_hbc_qroo + 6 variants (14 views)
+// ASF: v_asf_iroo + 6 variants, v_asf_qroo + 6 variants (14 views)
+// BRM: v_brm_iroo (1 view), v_brm_qroo (1 view) - only 1 DC so no variants
+
+// Top-level aggregated views
+Table gold_native.v_iroo [note: 'View: UNION ALL of all BU IROO base templates'] {
+  profile_id string
+  item_id string
+  facility_id string
+  location_barcode string
+  Note: '''
+    SELECT * FROM v_biceps_iroo
+    UNION ALL SELECT * FROM v_hbc_iroo
+    UNION ALL SELECT * FROM v_asf_iroo
+    UNION ALL SELECT * FROM v_brm_iroo
+  '''
+}
+
+Table gold_native.v_qroo [note: 'View: UNION ALL of all BU QROO base templates'] {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+  Note: '''
+    SELECT * FROM v_biceps_qroo
+    UNION ALL SELECT * FROM v_hbc_qroo
+    UNION ALL SELECT * FROM v_asf_qroo
+    UNION ALL SELECT * FROM v_brm_qroo
+  '''
+}
+
+// =====================================================================
+// KEY INSIGHT: Version B Solution
+// =====================================================================
+// TEMPLATE PATTERN:
+// 1 base view (v_biceps_iroo) with full SQL logic + 6 one-line variants
+// Change dim_item.description → item_description? Update 1 dimension.
+// All 51 views instantly inherit the fix.
+//
+// DIMENSIONAL MODEL:
+// Facts (∞) join to Dimensions (1) via surrogate keys (_sk).
+// Liquid clustering on (facility_sk, date_sk) for 10-100x query speedup.
+// Business unit becomes a column filter, not 40+ separate view definitions.
+//
+// POWER BI COMPATIBILITY:
+// Compatibility views have identical names and column shapes as Version A.
+// Power BI datasets require zero changes when switching from A to B.
+// =====================================================================

@@ -1,6 +1,9 @@
+-- Databricks notebook source
+-- DBTITLE 1,Cell 1
 -- =====================================================================
--- Giant Eagle POC: 08_validate_compat_shapes.sql
--- Column-by-column shape comparison between Version A and Version B.
+-- Giant Eagle: 08_validate_compat_shapes.sql
+-- Column-by-column shape comparison between Version A (50 views) and
+-- Version B (50 compat views).
 --
 -- The result-fidelity diff in 07_benchmark_queries.sql catches row differences
 -- but won't surface a column drifting from DECIMAL to STRING if both sides are
@@ -14,8 +17,7 @@ USE CATALOG ge_poc;
 
 -- ---------------------------------------------------------------------
 -- Mapping table: Snowflake view -> Version A view -> Version B compat view
--- Add rows as new compat views are built. NULL b_view means "intentionally
--- not migrated" (currently: misha_test_v only).
+-- Add rows as new compat views are built.
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE TEMPORARY VIEW compat_mapping AS
 SELECT * FROM VALUES
@@ -68,8 +70,7 @@ SELECT * FROM VALUES
   ('PSE_CASE_V',                     'gold_lift_shift.pse_case_v',                      'gold_native.v_pse_case'),
   ('SIS_V',                          'gold_lift_shift.sis_v',                           'gold_native.v_sis'),
   ('ITEM_FIRST_RCPT',                'gold_lift_shift.item_first_rcpt',                 'gold_native.v_item_first_rcpt'),
-  ('TIME_DIFF',                      'gold_lift_shift.time_diff',                       'gold_native.v_time_diff'),
-  ('MISHA_TEST_V',                   'gold_lift_shift.misha_test_v',                    NULL)   -- intentionally not migrated
+  ('TIME_DIFF',                      'gold_lift_shift.time_diff',                       'gold_native.v_time_diff')
   AS t(snowflake_view, a_view, b_view);
 
 -- ---------------------------------------------------------------------
@@ -99,7 +100,7 @@ matched AS (
   FROM compat_mapping m
   LEFT JOIN a_cols a ON a.qualified_view = lower(m.a_view)
   LEFT JOIN b_cols b ON b.qualified_view = lower(m.b_view) AND b.ordinal_position = a.ordinal_position
-  WHERE m.b_view IS NOT NULL
+  WHERE m.b_view IS NOT NULL  -- all rows now have b_view
 )
 SELECT snowflake_view,
        count(*)                                                    AS columns_in_a,
@@ -117,10 +118,9 @@ ORDER BY type_mismatches DESC, name_mismatches DESC, missing_in_b DESC, snowflak
 -- Any row returned is a compat view that needs adjustment to match its Version A counterpart.
 
 -- ---------------------------------------------------------------------
--- Bonus: count of compat coverage
+-- Coverage summary (expect 50 / 50)
 -- ---------------------------------------------------------------------
 SELECT
-  count(*) AS total_snowflake_views,
-  count(CASE WHEN b_view IS NULL THEN 1 END) AS intentionally_not_migrated,
-  count(CASE WHEN b_view IS NOT NULL THEN 1 END) AS expected_compat_count
+  count(*) AS total_views,
+  count(CASE WHEN b_view IS NOT NULL THEN 1 END) AS compat_count
 FROM compat_mapping;

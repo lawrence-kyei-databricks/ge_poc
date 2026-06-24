@@ -1,0 +1,520 @@
+// =====================================================================
+// Giant Eagle POC - Version B: Lakehouse-Native Star Schema (DEMO VERSION)
+// Simplified for presentation: Core Bronze + Key Dimensions + Facts + Views
+// ⚠️ Bronze = Synthetic placeholder data for POC only
+// =====================================================================
+
+Project version_b_demo {
+  database_type: 'Databricks Delta Lake'
+  Note: '''
+    VERSION B SOLUTION:
+    - Dimensional modeling: Facts (∞) join to Dimensions (1)
+    - Centralized logic in dimensions/facts
+    - Template pattern: 1 base view → 6 one-line variants
+    - Change 1 dimension? All 51 views inherit the fix
+    - Liquid clustering: 10-100x query speedup
+  '''
+}
+
+// =====================================================================
+// BRONZE LAYER - Core Tables (Same as Version A)
+// In production: Dimensions/Facts source from manhattan_prod.silver.*
+// =====================================================================
+
+TableGroup bronze_layer {
+  bronze.item_master_ite_item
+  bronze.item_master_ite_item_package
+  bronze.dcinventory_dci_inventory
+  bronze.dcinventory_dci_location
+  bronze.pix_pix_pix_entry
+  bronze.inventory_management_inm_adjustment_reason_code
+}
+
+Table bronze.item_master_ite_item {
+  pk bigint [pk]
+  item_id string [not null]
+  profile_id string [not null]
+  description string
+  lpn_per_tier int
+  ext_gegl_dcxx_virtual_whse string
+  created_timestamp timestamp
+  __hevo__marked_deleted string [default: 'FALSE']
+
+  Note: 'POC Bronze: Sources dim_item. In prod, replaced by Silver SCD2.'
+}
+
+Table bronze.item_master_ite_item_package {
+  item_pk bigint [ref: > bronze.item_master_ite_item.pk]
+  standard_quantity_uom_id string [note: 'UNIT or PACK']
+  height decimal
+  width decimal
+  length decimal
+  weight decimal
+  volume decimal
+
+  Note: 'POC Bronze: Sources dim_item (denormalized UNIT/PACK rows).'
+}
+
+Table bronze.dcinventory_dci_inventory {
+  inventory_id string [pk]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  on_hand decimal
+  allocated decimal
+  created_timestamp timestamp
+
+  Note: 'POC Bronze: Sources fact_inventory_snapshot. In prod, Silver CDC.'
+}
+
+Table bronze.dcinventory_dci_location {
+  location_id string [pk]
+  facility_id string
+  location_barcode string
+  location_type string
+  aisle string
+  bay string
+  level string
+
+  Note: 'POC Bronze: Sources dim_location. In prod, Silver SCD1.'
+}
+
+Table bronze.pix_pix_pix_entry {
+  pix_entry_id string [pk]
+  item_id string [ref: > bronze.item_master_ite_item.item_id]
+  facility_id string
+  location_id string [ref: > bronze.dcinventory_dci_location.location_id]
+  reason_code_id string [ref: > bronze.inventory_management_inm_adjustment_reason_code.reason_code_id]
+  source_transaction_type string
+  adjustment_qty decimal
+  created_timestamp timestamp
+
+  Note: 'POC Bronze: Sources fact_inventory_transaction, fact_cycle_count_adjustment.'
+}
+
+Table bronze.inventory_management_inm_adjustment_reason_code {
+  reason_code_id string [pk]
+  reason_code string
+  reason_description string
+
+  Note: 'POC Bronze: Sources dim_adjustment_reason.'
+}
+
+// =====================================================================
+// GOLD DIMENSIONS - Conformed, Reusable (9 total, showing 5 key ones)
+// =====================================================================
+
+TableGroup dimensions {
+  gold_native.dim_item
+  gold_native.dim_facility
+  gold_native.dim_location
+  gold_native.dim_business_unit
+  gold_native.dim_adjustment_reason
+}
+
+Table gold_native.dim_item {
+  item_sk bigint [pk, increment, note: 'Surrogate key']
+  item_id string [not null, unique, note: 'Natural key']
+  profile_id string [note: 'D0001, D0044, D0080']
+  description string
+  lpn_per_tier int
+  tiers_per_pallet int
+  unit_height decimal [note: 'Denormalized from UNIT package']
+  unit_width decimal
+  unit_weight decimal
+  unit_volume decimal
+  pack_height decimal [note: 'Denormalized from PACK package']
+  pack_weight decimal
+  pack_volume decimal
+  ext_gegl_dcxx_virtual_whse string
+  // SCD2 scaffolding (not yet active)
+  effective_from timestamp [default: `current_timestamp()`]
+  effective_to timestamp [default: `cast('9999-12-31' as timestamp)`]
+  is_current boolean [default: true]
+  version_number int [default: 1]
+
+  Indexes {
+    item_id [name: 'idx_item_natural_key']
+  }
+
+  Note: '''
+    CONFORMED ITEM DIMENSION.
+    - Denormalizes UNIT and PACK package rows (no JOIN needed downstream)
+    - SCD2 scaffolding prevents breaking changes in Phase 2
+    - Replaces item_master JOINs in ALL 51 Version A views
+    - Change description column here → all views inherit instantly
+  '''
+}
+
+Table gold_native.dim_facility {
+  facility_sk bigint [pk, increment]
+  facility_id string [not null, unique, note: 'D0001, D0044, D0080']
+  facility_short string [note: 'Last 2 chars: 01, 44, 80']
+  facility_name string
+  business_unit_code string [note: 'BICEPS, HBC, ASF, BRM']
+
+  Indexes {
+    business_unit_code [name: 'idx_facility_bu']
+  }
+
+  Note: '''
+    CONFORMED FACILITY DIMENSION.
+    - Denormalizes business_unit_code for query convenience
+    - Replaces facility_fac_facility JOINs
+  '''
+}
+
+Table gold_native.dim_location {
+  location_sk bigint [pk, increment]
+  location_id string [not null, unique]
+  location_barcode string
+  facility_id string [ref: > gold_native.dim_facility.facility_id]
+  location_type string [note: 'PICK, RESERVE, STAGING']
+  aisle string
+  bay string
+  level string
+
+  Note: 'CONFORMED LOCATION DIMENSION. Replaces dci_location JOINs.'
+}
+
+Table gold_native.dim_business_unit {
+  business_unit_sk bigint [pk, increment]
+  business_unit_code string [not null, unique, note: 'BICEPS, HBC, ASF, BRM']
+  business_unit_name string
+  primary_facility_id string [ref: > gold_native.dim_facility.facility_id]
+  facility_id_pattern string [note: 'D0031,D0032,D0033,... or ALL']
+
+  Note: '''
+    REPLACES BICEPS/HBC/ASF/BRM VIEW NAME DUPLICATION.
+    - Business unit becomes a column filter
+    - No more 40+ separate view names for different BUs
+    - Add new BU? Insert 1 row, not create 14 new views
+  '''
+}
+
+Table gold_native.dim_adjustment_reason {
+  reason_sk bigint [pk, increment]
+  reason_code_id string [not null, unique]
+  reason_code string [note: 'PIX, CYCLE_COUNT, DAMAGE']
+  reason_description string
+  category string [note: 'ADJUSTMENT, CYCLE_COUNT']
+
+  Note: 'CONFORMED ADJUSTMENT REASON DIMENSION.'
+}
+
+// =====================================================================
+// GOLD FACTS - Central Data (12 total, showing 2 key ones)
+// All liquid clustered on (facility_sk, date_sk)
+// =====================================================================
+
+TableGroup facts {
+  gold_native.fact_inventory_snapshot
+  gold_native.fact_inventory_transaction
+}
+
+Table gold_native.fact_inventory_snapshot {
+  inventory_snapshot_sk bigint [pk, increment]
+  item_sk bigint [ref: > gold_native.dim_item.item_sk, note: '1 (dim) : ∞ (fact)']
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk, note: '1 : ∞']
+  location_sk bigint [ref: > gold_native.dim_location.location_sk, note: '1 : ∞']
+  business_unit_sk bigint [ref: > gold_native.dim_business_unit.business_unit_sk, note: '1 : ∞']
+  date_sk bigint [note: 'FK to dim_date (not shown)']
+  on_hand_qty decimal
+  allocated_qty decimal
+  available_qty decimal [note: 'on_hand - allocated']
+  pick_location_qty decimal
+  has_inventory boolean
+  snapshot_taken_at timestamp
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster', note: 'CLUSTER BY for 10-100x speedup']
+  }
+
+  Note: '''
+    DAILY INVENTORY SNAPSHOT FACT.
+    - Replaces: ccs_iroo_v, ccs_item_snapshot_v, biceps_iroo_v (and ALL variants)
+    - Joins to 5 dimensions via surrogate keys (_sk)
+    - Liquid clustered on (facility_sk, date_sk)
+    - Query pattern: SELECT from fact JOIN dimensions (not Bronze)
+  '''
+}
+
+Table gold_native.fact_inventory_transaction {
+  transaction_sk bigint [pk, increment]
+  pix_entry_id string [not null, unique]
+  item_sk bigint [ref: > gold_native.dim_item.item_sk, note: '1 : ∞']
+  facility_sk bigint [ref: > gold_native.dim_facility.facility_sk, note: '1 : ∞']
+  date_sk bigint [note: 'FK to dim_date']
+  reason_sk bigint [ref: > gold_native.dim_adjustment_reason.reason_sk, note: '1 : ∞']
+  source_transaction_type string [note: 'ADJUSTMENT, CYCLE_COUNT, RECEIVING']
+  grouping_tag string [note: 'InventoryAdjustment, Scratch, etc.']
+  signed_quantity decimal [note: 'Positive = receipt, Negative = shipment']
+  created_at_utc timestamp
+
+  Indexes {
+    (facility_sk, date_sk) [name: 'liquid_cluster']
+  }
+
+  Note: '''
+    INVENTORY TRANSACTION FACT (PIX entries).
+    - Replaces: ge_cs_transaction_dtl_v, ccs_qroo_v (transaction aggregates)
+    - Every adjustment, receipt, shipment, cycle count
+    - Liquid clustered on (facility_sk, date_sk)
+  '''
+}
+
+// =====================================================================
+// GOLD COMPATIBILITY VIEWS - Template Pattern (51 total, showing key examples)
+// Same names and column shapes as Version A for Power BI compatibility
+// =====================================================================
+
+TableGroup compat_ccs_views {
+  gold_native.ccs_iroo_v
+  gold_native.ccs_qroo_v
+}
+
+Table gold_native.ccs_iroo_v {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  unit_height decimal
+  location_barcode string
+  has_inv string
+
+  Note: '''
+    VIEW (no BU filter): SELECT from fact_inventory_snapshot
+    JOIN dim_item, dim_facility, dim_location.
+
+    VERSION A: 50+ lines of SQL with full JOINs to Bronze.
+    VERSION B: 15 lines of SQL joining fact to dims (Bronze logic hidden in fact).
+
+    Change item description column? Update dim_item dimension → this view inherits.
+  '''
+}
+
+Table gold_native.ccs_qroo_v {
+  profile_id string
+  facility_id string
+  item_id string
+  on_hand_qty decimal
+  location_barcode string
+
+  Note: '''
+    VIEW: SELECT from fact_inventory_snapshot WHERE has_inventory = true
+    JOIN dim_item, dim_facility, dim_location.
+
+    VERSION A: Duplicates ccs_iroo_v JOIN logic.
+    VERSION B: Reuses fact_inventory_snapshot (no duplicated logic).
+  '''
+}
+
+TableGroup compat_biceps_iroo {
+  gold_native.v_biceps_iroo
+  gold_native.v_biceps_iroo_d0001
+  gold_native.v_biceps_iroo_d0044
+  gold_native.v_biceps_iroo_d0080
+}
+
+Table gold_native.v_biceps_iroo {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+  has_inv string
+
+  Note: '''
+    VIEW (TEMPLATE): SELECT from fact_inventory_snapshot
+    JOIN dim_item, dim_facility, dim_location, dim_business_unit
+    WHERE dim_business_unit.business_unit_code = 'BICEPS'.
+
+    VERSION A: Duplicates ccs_iroo_v + adds BU filter.
+    VERSION B: Same SQL as ccs_iroo_v + 1 WHERE clause (BU filter).
+
+    THIS IS THE BASE TEMPLATE FOR 6 VARIANTS BELOW.
+  '''
+}
+
+Table gold_native.v_biceps_iroo_d0001 {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+
+  Note: '''
+    VIEW (VARIANT): SELECT * FROM v_biceps_iroo
+    WHERE profile_id IN ('D0001', 'D0008')
+
+    VERSION A: 50+ lines duplicating v_biceps_iroo logic.
+    VERSION B: 1 line filtering the base template.
+
+    FIX A BUG IN v_biceps_iroo? This variant inherits instantly.
+  '''
+}
+
+Table gold_native.v_biceps_iroo_d0044 {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+
+  Note: '''
+    VIEW (VARIANT): SELECT * FROM v_biceps_iroo
+    WHERE profile_id = 'D0044'
+
+    1-LINE VARIANT. Change base template → all 6 variants inherit.
+  '''
+}
+
+Table gold_native.v_biceps_iroo_d0080 {
+  profile_id string
+  facility_id string
+  item_id string
+  lpnpertier int
+  location_barcode string
+
+  Note: '''
+    VIEW (VARIANT): SELECT * FROM v_biceps_iroo
+    WHERE profile_id = 'D0080'
+
+    ⚠️ THERE ARE 3 MORE VARIANTS: d0050, d0061, d0070 (not shown)
+    All follow same pattern: 1-line SELECT * FROM base template + WHERE.
+  '''
+}
+
+TableGroup compat_biceps_qroo {
+  gold_native.v_biceps_qroo
+  gold_native.v_biceps_qroo_d0001
+  gold_native.v_biceps_qroo_d0044
+}
+
+Table gold_native.v_biceps_qroo {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+
+  Note: '''
+    VIEW (TEMPLATE): SELECT from fact_inventory_snapshot
+    WHERE dim_business_unit.business_unit_code = 'BICEPS'
+    AND has_inventory = true.
+
+    BASE TEMPLATE FOR 6 QROO VARIANTS.
+  '''
+}
+
+Table gold_native.v_biceps_qroo_d0001 {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+
+  Note: '''
+    VIEW (VARIANT): SELECT * FROM v_biceps_qroo
+    WHERE profile_id IN ('D0001', 'D0008')
+  '''
+}
+
+Table gold_native.v_biceps_qroo_d0044 {
+  profile_id string
+  item_id string
+  on_hand_qty decimal
+
+  Note: '''
+    VIEW (VARIANT): SELECT * FROM v_biceps_qroo
+    WHERE profile_id = 'D0044'
+
+    ⚠️ THERE ARE 4 MORE VARIANTS: d0050, d0061, d0070, d0080 (not shown)
+  '''
+}
+
+TableGroup compat_ge_cs_views {
+  gold_native.ge_cs_cycl_cnt_adjmt_dtlv
+}
+
+Table gold_native.ge_cs_cycl_cnt_adjmt_dtlv {
+  pix_entry_id string
+  item_id string
+  facility_id string
+  adjustment_qty decimal
+  reason_code string
+  created_timestamp timestamp
+
+  Note: '''
+    VIEW: SELECT from fact_inventory_transaction (or fact_cycle_count_adjustment)
+    JOIN dim_item, dim_facility, dim_adjustment_reason
+    WHERE source_transaction_type = 'CYCLE_COUNT'.
+
+    VERSION A: Queries Bronze directly with full JOINs.
+    VERSION B: Queries fact (Bronze logic already embedded).
+  '''
+}
+
+// =====================================================================
+// THE SOLUTION VISUALIZED
+// =====================================================================
+
+// Note: In this diagram you can see:
+//
+// 1. BRONZE LAYER (orange tables)
+//    - Same 6 core tables as Version A
+//    - BUT views don't query Bronze directly anymore
+//
+// 2. DIMENSIONS (gold tables, 1 side of relationships)
+//    - dim_item: Denormalizes UNIT/PACK package rows
+//    - dim_facility: Denormalizes business_unit_code
+//    - dim_location: Warehouse locations
+//    - dim_business_unit: Replaces BICEPS/HBC/ASF/BRM view duplication
+//    - dim_adjustment_reason: Reason codes
+//
+// 3. FACTS (green tables, ∞ side of relationships)
+//    - fact_inventory_snapshot: Daily inventory state
+//      → Replaces: ccs_iroo_v, ccs_item_snapshot_v, ALL *_iroo_v variants
+//      → Sources: dci_inventory (Bronze) → aggregated daily
+//    - fact_inventory_transaction: Every PIX entry
+//      → Replaces: ge_cs_transaction_dtl_v, ccs_qroo_v aggregates
+//      → Sources: pix_pix_pix_entry (Bronze)
+//
+// 4. COMPATIBILITY VIEWS (blue tables)
+//    - Same names and column shapes as Version A
+//    - Power BI datasets require ZERO changes
+//    - TEMPLATE PATTERN:
+//      → v_biceps_iroo (base template, 15 lines of SQL)
+//      → v_biceps_iroo_d0001 (1-line variant: SELECT * FROM base + WHERE)
+//      → v_biceps_iroo_d0044 (1-line variant)
+//      → ... 4 more variants (6 total)
+//
+// 5. RELATIONSHIPS (1:∞ cardinality)
+//    - dim_item (1) → fact_inventory_snapshot (∞) via item_sk
+//    - dim_facility (1) → fact_inventory_snapshot (∞) via facility_sk
+//    - dim_location (1) → fact_inventory_snapshot (∞) via location_sk
+//    - dim_business_unit (1) → fact_inventory_snapshot (∞) via business_unit_sk
+//
+// 6. THE MAINTENANCE WIN:
+//    - Want to rename item_master.description → item_description?
+//      → Update dim_item dimension (1 place)
+//      → All 51 views instantly inherit (they query dim_item, not Bronze)
+//    - Fix a JOIN bug in the item + package logic?
+//      → Fix dim_item dimension (already denormalized UNIT/PACK)
+//      → All 51 views inherit (no package JOIN needed downstream)
+//    - Add a new column to item_master?
+//      → Add to dim_item dimension
+//      → Update 2 base templates (v_biceps_iroo, v_biceps_qroo)
+//      → 12 variants automatically inherit (they SELECT * FROM base)
+//
+// 7. PERFORMANCE WIN:
+//    - fact_inventory_snapshot: CLUSTER BY (facility_sk, date_sk)
+//    - Query: WHERE facility_sk = X AND date_sk = Y
+//    - Result: 10-100x faster (predicate pushdown, data co-location)
+//
+// 8. SCALABILITY WIN:
+//    - Add new business unit (e.g., "FRESH")?
+//      → Version A: Create 14 new views
+//      → Version B: INSERT 1 row into dim_business_unit
+//    - Add new facility (e.g., "D0099")?
+//      → Version A: Create 2 new variant views per BU
+//      → Version B: Data automatically flows through existing variants
+//
+// This is how Version B solves Version A's maintenance nightmare.
+// =====================================================================

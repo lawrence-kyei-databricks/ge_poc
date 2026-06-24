@@ -29,3 +29,8 @@ Thumbs.db
 *.tmp
 *.log
 /tmp/
+
+# Local-only files (keep on local machine, exclude from GitHub)
+WORD_DOC_UPDATES.md
+claude.md
+giant_eagle_poc.docx

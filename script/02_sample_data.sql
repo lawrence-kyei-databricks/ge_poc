@@ -1,5 +1,6 @@
+-- Databricks notebook source
 -- =====================================================================
--- Giant Eagle POC: 02_sample_data.sql  (SCALED)
+-- Giant Eagle: 02_sample_data.sql
 -- Generates synthetic data using sequence-based generators so all 12 facts
 -- have rows to load. Volumes chosen to be small enough to run on a Serverless
 -- Small but large enough that liquid clustering and benchmarks produce signal.
@@ -18,6 +19,7 @@
 -- =====================================================================
 
 USE CATALOG ge_poc;
+
 USE SCHEMA bronze;
 
 -- ---------------------------------------------------------------------
@@ -36,6 +38,7 @@ SELECT * FROM VALUES
 INSERT INTO default_inventory_management_inm_adjustment_reason_code
 SELECT 'CC', fac, 'Cycle Count Adjustment', 'AUDIT', current_timestamp(),current_timestamp(),current_timestamp(),current_timestamp(),'FALSE',current_timestamp()
 FROM (SELECT explode(array('D0033','D0044','D0050','D0061','D0070','D0080','D0008')) AS fac);
+
 INSERT INTO default_inventory_management_inm_adjustment_reason_code
 SELECT 'DD', fac, 'Damaged / Destroyed', 'LOSS', current_timestamp(),current_timestamp(),current_timestamp(),current_timestamp(),'FALSE',current_timestamp()
 FROM (SELECT explode(array('D0033','D0044','D0050','D0061','D0070','D0080','D0008')) AS fac);
@@ -43,7 +46,7 @@ FROM (SELECT explode(array('D0033','D0044','D0050','D0061','D0070','D0080','D000
 -- ---------------------------------------------------------------------
 -- Locations: 100 per facility across 14 facilities = ~1,400 rows
 -- ---------------------------------------------------------------------
-INSERT INTO default_dcinventory_dci_location
+INSERT INTO default_dcinventory_dci_location (location_id, facility_id, profile_id, location_barcode, location_type, aisle, bay, level, __hevo__marked_deleted)
 SELECT
   concat('LOC-', fac, '-', lpad(cast(loc_n AS STRING), 4, '0'))            AS location_id,
   fac                                                                       AS facility_id,
@@ -66,7 +69,7 @@ FROM (
 -- ---------------------------------------------------------------------
 -- Item master: ~10,000 items spread across the 8 BU facilities
 -- ---------------------------------------------------------------------
-INSERT INTO default_item_master_ite_item
+INSERT INTO default_item_master_ite_item (pk, item_id, profile_id, short_description, description, long_description, style_suffix, display_uom_id, lpn_per_tier, tiers_per_pallet, unit_price, catch_weight_item, average_weight, ext_gegl_dcxx_virtual_whse, ext_gegl_dc33_virtual_whse, ext_gegl_department, ext_gegl_product_size, created_timestamp, updated_timestamp, __hevo__ingested_at, __hevo__loaded_at, __hevo__marked_deleted, __hevo__source_modified_at)
 SELECT
   cast(item_n AS BIGINT)                                                                          AS pk,
   lpad(cast(100000 + item_n AS STRING), 6, '0')                                                   AS item_id,
@@ -107,7 +110,7 @@ FROM (
 );
 
 -- Item packages: UNIT + PACK for each item = ~20,000 rows
-INSERT INTO default_item_master_ite_item_package
+INSERT INTO default_item_master_ite_item_package (item_pk, standard_quantity_uom_id, quantity, height, width, length, weight, volume, __hevo__marked_deleted)
 SELECT pk, 'UNIT', 1,
   cast(0.5 + (pk % 5) AS DECIMAL(18,4)),
   cast(0.3 + (pk % 3) AS DECIMAL(18,4)),
@@ -116,7 +119,8 @@ SELECT pk, 'UNIT', 1,
   cast(0.06 + (pk % 5) * 0.01 AS DECIMAL(18,4)),
   'FALSE'
 FROM default_item_master_ite_item;
-INSERT INTO default_item_master_ite_item_package
+
+INSERT INTO default_item_master_ite_item_package (item_pk, standard_quantity_uom_id, quantity, height, width, length, weight, volume, __hevo__marked_deleted)
 SELECT pk, 'PACK', 12,
   cast(6 + (pk % 6) AS DECIMAL(18,4)),
   cast(4 + (pk % 4) AS DECIMAL(18,4)),
@@ -129,7 +133,7 @@ FROM default_item_master_ite_item;
 -- ---------------------------------------------------------------------
 -- Inventory: ~50,000 rows (each item gets ~5 inventory rows on average across containers/locations)
 -- ---------------------------------------------------------------------
-INSERT INTO default_dcinventory_dci_inventory
+INSERT INTO default_dcinventory_dci_inventory (inventory_id, item_id, org_id, facility_id, location_id, inventory_container_id, inventory_container_type_id, on_hand, allocated, to_be_filled, is_in_transit, inventory_attribute1, created_timestamp, updated_timestamp, __hevo__loaded_at, __hevo__marked_deleted)
 SELECT
   concat('INV-', i.item_id, '-', cast(c.n AS STRING))                                               AS inventory_id,
   i.item_id, i.profile_id,
@@ -148,10 +152,10 @@ SELECT
   'FALSE'
 FROM default_item_master_ite_item i
 CROSS JOIN (SELECT explode(sequence(0, 4)) AS n) c
-WHERE i.pk % 2 = 0;  -- ~half of items have inventory = ~25K * 5 = ~25K... let's expand
+WHERE i.pk % 2 = 0;
 
 -- Add a second pass for the other half so all items have at least some inventory
-INSERT INTO default_dcinventory_dci_inventory
+INSERT INTO default_dcinventory_dci_inventory (inventory_id, item_id, org_id, facility_id, location_id, inventory_container_id, inventory_container_type_id, on_hand, allocated, to_be_filled, is_in_transit, inventory_attribute1, created_timestamp, updated_timestamp, __hevo__loaded_at, __hevo__marked_deleted)
 SELECT
   concat('INV2-', i.item_id, '-', cast(c.n AS STRING))                                              AS inventory_id,
   i.item_id, i.profile_id, i.profile_id,
@@ -208,7 +212,7 @@ FROM (
 -- ---------------------------------------------------------------------
 -- Receiving: ~5,000 ASNs with lines
 -- ---------------------------------------------------------------------
-INSERT INTO default_receiving_rcv_asn
+INSERT INTO default_receiving_rcv_asn (asn_id, org_id, purchase_order_id, asn_status, created_timestamp, updated_timestamp, __hevo__marked_deleted)
 SELECT
   concat('ASN-', cast(n AS STRING))                                                                AS asn_id,
   CASE WHEN n % 8 = 0 THEN 'D0001' WHEN n % 8 = 1 THEN 'D0008' WHEN n % 8 = 2 THEN 'D0033'
@@ -221,7 +225,7 @@ SELECT
   'FALSE'
 FROM (SELECT explode(sequence(1, 5000)) AS n);
 
-INSERT INTO default_receiving_rcv_asn_line
+INSERT INTO default_receiving_rcv_asn_line (asn_id, asn_line_id, item_id, ordered_quantity, received_quantity, __hevo__marked_deleted)
 SELECT
   a.asn_id, concat(a.asn_id, '-L', cast(l.n AS STRING)),
   lpad(cast(100000 + ((cast(substring(a.asn_id, 5) AS BIGINT) + l.n) % 10000) AS STRING), 6, '0'),
@@ -232,7 +236,7 @@ FROM default_receiving_rcv_asn a
 CROSS JOIN (SELECT explode(sequence(1, 3)) AS n) l;
 
 -- Purchase orders
-INSERT INTO default_receiving_rcv_purchase_order
+INSERT INTO default_receiving_rcv_purchase_order (purchase_order_id, org_id, purchase_order_status, vendor_id, __hevo__marked_deleted)
 SELECT
   concat('PO-', cast(n AS STRING)),
   CASE n % 8 WHEN 0 THEN 'D0001' WHEN 1 THEN 'D0033' WHEN 2 THEN 'D0044' WHEN 3 THEN 'D0050'
@@ -256,7 +260,7 @@ CROSS JOIN (SELECT explode(sequence(1, 3)) AS n) l;
 -- ---------------------------------------------------------------------
 -- OLPNs (outbound license plates): 5,000 OLPNs + details
 -- ---------------------------------------------------------------------
-INSERT INTO default_pickpack_ppk_olpn
+INSERT INTO default_pickpack_ppk_olpn (olpn_id, org_id, status, facility_id, destination_facility_id, order_planning_run_id, ext_pharmacy_routeid, ext_pharmacy_stop_id, created_timestamp, __hevo__marked_deleted)
 SELECT
   concat('OLPN-', cast(n AS STRING)),
   CASE n % 8 WHEN 0 THEN 'D0001' WHEN 1 THEN 'D0033' WHEN 2 THEN 'D0044' WHEN 3 THEN 'D0050'
@@ -272,7 +276,7 @@ SELECT
   'FALSE'
 FROM (SELECT explode(sequence(1, 5000)) AS n);
 
-INSERT INTO default_pickpack_ppk_olpn_detail
+INSERT INTO default_pickpack_ppk_olpn_detail (olpn_id, org_id, item_id, order_id, order_line_id, packed_quantity, facility_id, facility_address_address1, facility_address_address2, facility_address_city, facility_address_state, facility_address_postalcode, appl_code, status, created_timestamp, ext_pharmacy_routeid, ext_pharmacy_stop_id, __hevo__marked_deleted)
 SELECT
   o.olpn_id, o.org_id,
   lpad(cast(100000 + (cast(substring(o.olpn_id, 6) AS BIGINT) * 13 + l.n) % 10000 AS STRING), 6, '0'),
@@ -325,7 +329,7 @@ INSERT INTO default_carrier_car_carrier VALUES
   ('CAR-004', 'Ryder',             'FALSE'),
   ('CAR-005', 'XPO Logistics',     'FALSE');
 
-INSERT INTO default_shipment_shp_shipment
+INSERT INTO default_shipment_shp_shipment (pk, shipment_id, org_id, origin_planned_arr_start_dttm, climate_control_id, planned_size1_value, ass_carrier_id, __hevo__marked_deleted)
 SELECT
   cast(n AS BIGINT),
   concat('SHIP-', cast(n AS STRING)),
